@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/inner_content_card"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg_rounded"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/tv_header_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:textColor="@color/widget_text_primary"
+                android:textSize="13dp"
+                android:textStyle="bold"
+                tools:text="第 8 周" />
+
+            <TextView
+                android:id="@+id/tv_header_range"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10dp"
+                tools:text="9/14 - 9/20" />
+        </RelativeLayout>
+
+        <!-- 固定表头容器：由渲染器 addView 注入表头行 -->
+        <LinearLayout
+            android:id="@+id/container_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <!-- 课程行列表：经由 RemoteViewsService 提供，支持垂直滚动 -->
+        <ListView
+            android:id="@+id/container_rows_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none"
+            tools:listitem="@layout/widget_week_grid_row" />
+
+        <TextView
+            android:id="@+id/tv_empty_status"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="12dp"
+            android:visibility="gone"
+            tools:text="本周没有课程"
+            tools:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/container_full_status"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_bg_rounded"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tv_full_status_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="16dp"
+            android:textStyle="bold"
+            tools:text="假期中" />
+
+        <TextView
+            android:id="@+id/tv_full_status_msg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="12dp"
+            tools:text="期待新学期" />
+    </LinearLayout>
+</FrameLayout>

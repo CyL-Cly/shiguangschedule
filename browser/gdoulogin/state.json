@@ -1,0 +1,190 @@
+{
+  "cookies": [
+    {
+      "name": "route",
+      "value": "031c9e4983ebb8c05bdfdfb139e0dcdb",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/authserver",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "JSESSIONID",
+      "value": "E2534A8F7B593FA4D75B46A49FBB54C6",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/authserver",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "CASTGC",
+      "value": "TGT-133085-12i-12v-3ybfbH053BqEeF-ejdBDk9Way7mJbwKvnWqV1u8JAij9nGs68vGJYKZyY3cnull_main",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/authserver",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE",
+      "value": "zh_CN",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/",
+      "expires": 1824529928.259049,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": null
+    },
+    {
+      "name": "MULTIFACTOR_BROWSER_FINGERPRINT",
+      "value": "54569BF99022FC5F6DE96F329006DD99",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/",
+      "expires": 1824529929.363619,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "WFWSESSID",
+      "value": "a2f7b0b569f256c756c05481a87820258bd152b3917549379ae3934050d9ab93",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": 1790574733.992347,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "urlss_file",
+      "value": "https%3A%2F%2Ffile.gdou.edu.cn",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": null
+    },
+    {
+      "name": "db_agent_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNzIwNiIsInVzZXJuYW1lIjoiMjAyNTQ0MDIxMjAxIiwiZXhwIjoxNzkwNTc0NzM1LCJpYXQiOjE3ODk5Njk5MzV9.CGcyXqB9oBajX9h1GSDe-fLzcDL6lzCa5BDANUhUZaw",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": 1790574736.043366,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "happyVoyage",
+      "value": "37fGf/RNqmDw/fZ+RycdzmXJ1kUJsGvz19qUKQw2P8MlXfk7FSyo3De/LAO+1LOgh0b7X2qo04r1nBIrP27clcowU0wcGROVjAEHNd+WByx2NeLc1CXNMeWCp2D2UtRRLMxwXxMU7dsewqaS4nLBNYf7bE0xd0av13vf2EB99PI=",
+      "domain": "authserver.gdou.edu.cn",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "org.springframework.web.servlet.i18n.CookieLocaleResolver.LOCALE",
+      "value": "zh_CN",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": 1824529950.335194,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": null
+    },
+    {
+      "name": "MULTIFACTOR_BROWSER_FINGERPRINT",
+      "value": "54569BF99022FC5F6DE96F329006DD99",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": 1824529951.728343,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    },
+    {
+      "name": "urlss",
+      "value": "https%3A%2F%2Fjw.gdou.edu.cn%2F",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": null
+    },
+    {
+      "name": "urlss_jw",
+      "value": "https%3A%2F%2Fjw.gdou.edu.cn%2F",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": null
+    },
+    {
+      "name": "ADCCookie-47873-sg_210.38.137.108",
+      "value": "FDIJCGNCFAAA",
+      "domain": "wfw.gdou.edu.cn",
+      "path": "/",
+      "expires": 1790006473.504625,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax",
+      "partitionKey": null
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://wfw.gdou.edu.cn",
+      "localStorage": [
+        {
+          "name": "db_agent_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNzIwNiIsInVzZXJuYW1lIjoiMjAyNTQ0MDIxMjAxIiwiZXhwIjoxNzkwNTc0NzM1LCJpYXQiOjE3ODk5Njk5MzV9.CGcyXqB9oBajX9h1GSDe-fLzcDL6lzCa5BDANUhUZaw"
+        },
+        {
+          "name": "db_agent_username",
+          "value": "202544021201"
+        },
+        {
+          "name": "browser_fingerprint",
+          "value": "54569BF99022FC5F6DE96F329006DD99"
+        },
+        {
+          "name": "language",
+          "value": "zh_CN"
+        }
+      ]
+    },
+    {
+      "origin": "https://authserver.gdou.edu.cn",
+      "localStorage": [
+        {
+          "name": "browser_fingerprint",
+          "value": "54569BF99022FC5F6DE96F329006DD99"
+        }
+      ]
+    }
+  ]
+}

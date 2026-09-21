@@ -1,0 +1,157 @@
+<html class="root-main"><head><script src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/ua-parser.min.js"></script><script src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/md5.min.js"></script></head><body>﻿
+<!-- 移动端 --><!-- PC端 --><!--校外用户登录--><!-- 二维码扫码登录 --><!-- 兼容性登录 --><!--校外用户登录--><!-- 帐号登录或动态码登录 -->
+	<meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><title>统一身份认证平台</title>
+	<script>
+	    var inputUserNameTip = "\u8BF7\u8F93\u5165\u7528\u6237\u540D";
+	    var inputPasswordTip = "\u8BF7\u8F93\u5165\u5BC6\u7801";
+	    var inputCodeTip = "\u8BF7\u8F93\u5165\u9A8C\u8BC1\u7801";
+	    
+	    var inputMobileTip = "\u8BF7\u8F93\u5165\u624B\u673A\u53F7\u6216\u5B66\u53F7";
+	    var inputDynamicTip = "\u8BF7\u8F93\u5165\u9A8C\u8BC1\u7801";
+	    //不转码，防止参数丢失
+	    var service = ["https:\/\/jw.gdou.edu.cn\/sso\/jziotlogin"];
+	    var type = null;
+	</script>
+	<script type="text/javascript">
+		if(service == '' || !service){
+	        service = '';//saml后缀
+	    }
+		var isQrLogin = "true";
+		var needCaptcha = "";
+		var is_dynamicLogin = "true";
+	    var contextPath = "/authserver";
+	    var cllt = "";
+	</script>
+	<link rel="stylesheet" type="text/css" href="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/css/toastr.min.css?v=20260529.200429"><link rel="stylesheet" type="text/css" href="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/css/login.css?v=20260529.200429"><link rel="stylesheet" type="text/css" href="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/iconfont/iconfont.css?v=20260529.200429"><link rel="stylesheet" type="text/css" href="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/css/fido.css?v=20260529.200429"><script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/jquery-latest.min.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/js/plugin/toastr.min.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/utils.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/common-header.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/common/encrypt.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/js/fido.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/js/schoolCombinedLogin.js?v=20260529.200429"></script>
+	<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/js/login.js?v=20260529.200429"></script>
+
+
+	<div class="container">
+		<div class="imgWrap">
+			<img class="mainbg" id="backgroundd" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/dzimages/one1.png"></div>
+		<div class="wrap">
+			<a style="display: none;" id="qrCodeA" class="qrcode" href="https://authserver.gdou.edu.cn/authserver/login?type=qrcode&amp;service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin"></a>
+			<section class="main">
+				<div class="logo"><img src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/dzimages/logo.png" alt=""></div>
+				<div class="tabHead" style="">
+					
+					<span id="pwdLoginSpan" class="selected_underline" style="width: 50%;"><a id="userNameLogin_a" href="https://authserver.gdou.edu.cn/authserver/login?type=userNameLogin&amp;service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin" class="loginFont_a">账号登录</a></span>
+					<span id="phoneLoginSpan" style="width: 50%;"><a id="dynamicLogin_a" href="https://authserver.gdou.edu.cn/authserver/login?type=dynamicLogin&amp;service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin" class="loginFont_a">验证码登录</a></span>
+					<!-- <span id="qrLoginSpan"><a id="qrLogin_a" class="loginFont_a" th:text="#{ids.qr.login}" onclick="showQrLogin()"></a></span> --></div>
+				<div class="login-pc">
+					<!-- fido登录 -->
+					<!-- 手机动态码登录 -->
+					<!-- 用户名密码登录 --><div id="pwdLoginDiv" style=""><div>
+		<div class="methods">
+		</div>
+		<form class="loginFromClass" method="post" id="pwdFromId" action="https://wfw.gdou.edu.cn/authserver/login?service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin">
+			<div class="form">
+				<!-- 用户名密码登录 --><div class="m-account">
+					<div class="username item">
+						<span class="prex-icon"><img src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/images/user1.png" class="login-icon"></span> 
+						<input id="username" name="username" type="text" readonly="readonly" placeholder="请输入学号/工号/身份证号" title="请输入学号/工号/身份证号" value="" autocomplete="off"></div>
+					<div class="password item">
+						<span class="prex-icon"><img src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/images/pass1.png" class="login-icon"></span>
+						<input id="password" name="passwordText" type="password" readonly="readonly" placeholder="请输入密码" title="请输入密码" autocomplete="off"><input id="saltPassword" name="password" type="hidden" autocomplete="off" readonly="readonly"><!-- <a class="input_eye suffix-icon eyehide"></a> --></div>
+					<div class="captcha item hide" id="captchaDiv">
+						<span class="prex-icon"><img src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/web/images/captcha1.png" class="login-icon"></span> 
+						<input type="text" id="captcha" name="captcha" placeholder="请输入验证码" title="请输入验证码" maxlength="10" autocomplete="off" readonly="readonly"><span class="captcha-img">
+							<img id="captchaImg" alt="验证码错误" height="30px"><a class="mask-inner captcha-refresh" onclick="reloadCaptcha(true)" href="javascript:void(0);">刷新</a>
+						</span>
+					</div>
+					</div>
+				<div id="formErrorTip" class="form-errorTip">
+					<span id="showErrorTip" class="form-error text-ellipsis"></span>
+					<span id="showWarnTip" class="form-warn"></span>
+				</div>
+				<div class="btn">
+					<a id="login_submit" href="javascript:void(0);" class="login-btn">登录</a>
+				</div>
+			</div>
+			<input type="hidden" id="_eventId" name="_eventId" value="submit" autocomplete="off" readonly="readonly"><input type="hidden" id="cllt" name="cllt" value="userNameLogin" autocomplete="off" readonly="readonly"><input type="hidden" id="dllt" name="dllt" value="generalLogin" autocomplete="off" readonly="readonly"><input type="hidden" name="lt" id="lt" value="" autocomplete="off" readonly="readonly"><input type="hidden" id="pwdEncryptSalt" value="FJ1MwSTAIrC4oxgm" autocomplete="off" readonly="readonly"><input type="hidden" id="execution" name="execution" value="e18s1" autocomplete="off" readonly="readonly"></form>
+		<script type="text/javascript">
+			$(function () {
+				$("input").on("focus",function(){
+					$(this).removeAttr('readonly');
+				}).each(function(index){
+					$(this).attr('autocomplete','off');
+					$(this).attr('readonly','readonly');
+				});
+			});
+		</script>
+	</div></div>
+					
+					<div class="lianjie">
+						<span>
+							<!--<a id="retrievePassId" th:href="@{../retrieve-password/retrievePassword/index.html#/}" class="fo-password" th:text="#{login.page.forget.pwd}"></a>	--><a id="retrievePassId" href="https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/retrieve-password/retrievePassword/index.html#/?service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin" class="fo-password">自助重置密码</a>
+						</span>
+						<span>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;</span>
+						<span><a style="cursor: pointer; font-family: PingFangSC-Regular; font-size: 14px; color: #FFFFFF; letter-spacing: 0; font-weight: 400; text-decoration:none;" class="activation-account" href="https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/shiyongbanzhu.html">人工重置密码</a></span>
+					</div>
+					
+					<!-- 帐号激活|忘记密码 --><!-- <div class="help">
+						<span th:if="${_showAccountActivationLink}">
+							<a id="activationAccountId" th:href="@{../retrieve-password/accountActivation/index.html#/}" class="activation-account" th:text="#{login.page.account.activity.btn}"></a>
+							<span>&nbsp;|&nbsp;</span>
+						</span>
+						<a id="retrievePassId" th:href="@{../retrieve-password/retrievePassword/index.html#/}" class="fo-password" th:text="#{login.page.forget.pwd}"></a>
+					</div> --></div>
+				<!-- 嵌入二维码登录 --><!-- <div class="login-qrcode hide">
+					<div th:replace="${@systemConfigUtils.getConfigTheme()+'/qrLoginPage'} :: qrLoginPage"></div>
+				</div> --></section>
+			<div class="dz_ewm">
+				<div>
+<script type="text/javascript" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/custom/js/qrcode.js?v=20260529.200429"></script>
+<div class="qr_scan_box">
+    <form method="post" id="qrLoginForm" action="/authserver/login?display=qrLogin&amp;service=https%3A%2F%2Fjw.gdou.edu.cn%2Fsso%2Fjziotlogin" role="form">
+        <div id="qr_code">
+             <div class="qr_scan_code"><img id="qr_img" src="/authserver/qrCode/getCode?uuid=QR-f1dewJHON4NYPHcHc36"></div>
+             <!-- <span class="title" th:text="#{ids.qr.login.tip}"></span> --><span class="title">企业微信扫码登录</span>
+        </div>
+
+        <div id="qr_success" style="margin-left:-5px;display: none">
+            <div class="qr_scan_success" style="margin-top: 0px;">
+                <img style="margin: 50px; 50px" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/custom/images/Success.png"><span style="display: block;" class="title title_h1">扫描成功</span>
+                <span class="sub_title">请在手机上「确认登录」</span>
+            </div>
+            <div class="scan_footer" style="margin-top:10px; border: 1px solid #2366FF; border-radius: 4px; padding: 5px 10px; background: #2366FF;"><a class="scan_a" href="javascript:refresh();">返回二维码</a></div>
+        </div>
+
+        <div id="qr_invalid" style="display: none">
+            <div class="qr_scan_code">
+                <img id="invalid_img" src="/authserver/qrCode/getCode?uuid=QR-f1dewJHON4NYPHcHc36"><div class="qr_scan_Invalid">
+                    <img id="qr_refresh" src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/custom/images/refresh.png" onclick="refresh()"></div>
+            </div>
+            <!-- <span class="title" th:text="#{ids.qr.login.tip}"></span> --><span class="title">企业微信扫码登录</span>
+        </div>
+
+        <input type="hidden" name="lt" id="lt" value="" autocomplete="off" readonly="readonly"><input type="hidden" name="uuid" id="uuid" value="QR-f1dewJHON4NYPHcHc36" autocomplete="off" readonly="readonly"><input type="hidden" name="cllt" value="qrLogin" autocomplete="off" readonly="readonly"><input type="hidden" id="dllt" name="dllt" value="generalLogin" autocomplete="off" readonly="readonly"><input type="hidden" name="execution" value="e18s1" autocomplete="off" readonly="readonly"><input type="hidden" name="_eventId" value="submit" autocomplete="off" readonly="readonly"><input type="hidden" name="rmShown" value="1" autocomplete="off" readonly="readonly"></form>
+</div>
+</div>
+				<!-- <p style="color: #ffffff;font-size: 14px;margin-top: -195px;letter-spacing: 3px;">企业微信扫码登录</p> --></div>
+			<div class="footer">
+				<!--跨校认证start--><!--跨校认证end--></div>
+			</div>
+		<div class="login_bottom">
+			<!-- <div class="login_navs"><img id="goleft" src="https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/customTheme/static/dzimages/goleft.png" alt="logo">
+				<img id="goright" src="https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/customTheme/static/dzimages/goright.png" alt="logo">
+			</div> --><div class="bq">
+				Copyright © 广东海洋大学  地址：广东省湛江市麻章区海大路1号  邮编：524088
+			</div>
+		</div>
+		<div class="language_switch t_switch">
+			<select id="language" onchange="changeLanguage(this)" class="t_switch_list">
+	            <option value="zh_CN" selected="selected">简体中文</option>
+	            <option value="en">English</option>
+	        <option value="zh_CN" selected="selected">简体中文</option></select>
+		</div>
+	</div>
+<script>(function(){var TARGET_HOST="jw.gdou.edu.cn";var reAbs=new RegExp("^(https?:)?\\/\\/jw\.gdou\.edu\.cn(\\/.*)?$","i");var PREFIX="https:\/\/wfw.gdou.edu.cn\/https:\/\/jw.gdou.edu.cn";var PREPATH=PREFIX.replace(/^https?:\/\/[^\/]+/,"");function toProxy(u){if(!u)return u;u=String(u);if(u.indexOf(PREFIX)===0)return u;var m=reAbs.exec(u);if(m)return PREFIX+(m[2]||"/");if(u.charAt(0)==="/"&&u.charAt(1)!=="/")return PREFIX+u;if(u.charAt(0)==="."){try{var __b="https://__t"+(location.pathname.indexOf(PREPATH)===0?location.pathname.substring(PREPATH.length):location.pathname);var __r=new URL(u,__b);return PREFIX+__r.pathname+__r.search+__r.hash;}catch(e){return PREFIX+"/"+u.replace(/^(\.\.\/)+/,"");}}if(u.indexOf(":")===-1&&u.substring(0,2)!=="//"&&u.charAt(0)!=="#"&&/\.(htm|html|jsp|do|asp|aspx|php)(\?|$)/i.test(u))return PREFIX+"/"+u;return u;}var _open=window.open;if(typeof _open==="function"){window.open=function(u,a,b){return _open.call(this,toProxy(u),a,b);};}function __bj(){if(window.jQuery&&jQuery.ajaxPrefilter){jQuery.ajaxPrefilter(function(o){if(o.url){o.url=toProxy(o.url);}});return true;}return false;}if(!__bj()){var __jt=setInterval(function(){if(__bj())clearInterval(__jt);},300);setTimeout(function(){clearInterval(__jt);},8000);}function fix(nodes){if(!nodes)return;for(var i=0;i<nodes.length;i++){var n=nodes[i];if(n&&n.nodeType===1){if((n.tagName==="A"||n.tagName==="AREA")&&n.getAttribute("href")){var h=toProxy(n.getAttribute("href"));if(h!==n.getAttribute("href"))n.setAttribute("href",h);}if(n.children&&n.children.length)fix(n.children);}}}fix(document.links);if(window.MutationObserver){var mo=new MutationObserver(function(muts){for(var j=0;j<muts.length;j++){var m=muts[j];if(m.type==="attributes"&&m.target&&m.target.getAttribute){var h=toProxy(m.target.getAttribute("href"));if(h!==m.target.getAttribute("href"))m.target.setAttribute("href",h);}if(m.addedNodes&&m.addedNodes.length)fix(m.addedNodes);}});mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:["href"]});}setTimeout(function(){try{fix(document.links);}catch(e){}},300);if(window.addEventListener){window.addEventListener("load",function(){try{fix(document.links);}catch(e){}});}})();</script>
+<script src="https://authserver.gdou.edu.cn/authserver/gdouThemeDz/static/custom/js/login-language.js?v=20260529.200429" type="text/javascript"></script>
+</body></html>

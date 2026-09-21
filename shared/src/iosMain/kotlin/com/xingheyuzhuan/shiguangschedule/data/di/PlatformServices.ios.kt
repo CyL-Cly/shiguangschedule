@@ -1,0 +1,47 @@
+package com.xingheyuzhuan.shiguangschedule.data.di
+
+import com.xingheyuzhuan.shiguangschedule.tool.update.AppUpdateController
+import com.xingheyuzhuan.shiguangschedule.tool.update.StubUpdateController
+import kotlinx.cinterop.ExperimentalForeignApi
+import okio.Path
+import okio.Path.Companion.toPath
+import org.koin.core.annotation.Named
+import org.koin.core.annotation.Single
+import platform.Foundation.NSCachesDirectory
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
+
+@Single
+class IosAppStorage : AppStorage {
+    @OptIn(ExperimentalForeignApi::class)
+    override val filesDir: Path
+        get() {
+            val paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true)
+            val pathStr = paths.first() as? String ?: ""
+            return pathStr.toPath()
+        }
+
+    @OptIn(ExperimentalForeignApi::class)
+    override val cacheDir: Path
+        get() {
+            val paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, true)
+            val pathStr = paths.first() as? String ?: ""
+            return pathStr.toPath()
+        }
+
+    override fun getDatabasePath(dbName: String): String {
+        return "$filesDir/$dbName"
+    }
+}
+
+@Single
+@Named("AppVersionCode")
+fun provideAppVersionCode(): Int = 0
+
+@Single
+fun bindAppUpdateController(impl: StubUpdateController): AppUpdateController = impl
+
+@Single
+@Named("AppVersionName")
+fun provideAppVersionName(): String = "0.0.0"
