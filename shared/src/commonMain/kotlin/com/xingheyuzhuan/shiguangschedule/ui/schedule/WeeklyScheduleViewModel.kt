@@ -15,13 +15,16 @@ import com.xingheyuzhuan.shiguangschedule.ui.schedule.components.ScheduleGridSty
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleModeProto
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
@@ -131,7 +134,10 @@ class WeeklyScheduleViewModel (
         getTodayLocalDate().startOfWeek(DayOfWeek.MONDAY)
     )
 
+    // 共享设置流：下游多处收集共用同一次 DataStore 订阅，避免重复执行内嵌查询
     private val appSettingsFlow = appSettingsRepository.getAppSettings()
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
+
     private val styleFlow = styleSettingsRepository.styleFlow
 
     private val courseTableConfigFlow = appSettingsFlow.flatMapLatest { settings ->
@@ -152,17 +158,36 @@ class WeeklyScheduleViewModel (
         }
     }
 
-    private val currentCoursesFlow = combine(
-        _pagerMondayDate,
-        appSettingsFlow,
-        courseTableConfigFlow,
-        timeSlotsFlow,
-        styleFlow
-    ) { date, settings, config, slots, style ->
-        val tableId = settings.currentCourseTableId
-        val mode = style.toComposedStyle().scheduleMode
+    /**
+     * 仅影响课程数据查询的设置字段。
+     * 无关偏好变化（提醒开关、主题等）不会触发课程数据库重新订阅。
+     */
+    private data class CourseQueryParams(val tableId: String, val showNonCurrentWeekCourses: Boolean)
 
-        if (config != null) {
+    private val courseQueryParamsFlow = appSettingsFlow
+        .map { CourseQueryParams(it.currentCourseTableId, it.showNonCurrentWeekCourses) }
+        .distinctUntilChanged()
+
+    // “显示非本周课程”模式下的全量课程共享流：3 个缓存窗口共用 1 次数据库订阅
+    private val allCoursesSharedFlow = courseQueryParamsFlow.flatMapLatest { params ->
+        if (params.tableId.isNotEmpty()) {
+            courseTableRepository.getCoursesWithWeeksByTableId(params.tableId)
+        } else {
+            flowOf(emptyList())
+        }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
+
+    // 第一层：原始课程数据查询。仅在翻页、换表、查询参数或课表配置变化时重建数据库订阅
+    private val courseDataFlow = combine(
+        _pagerMondayDate,
+        courseQueryParamsFlow,
+        courseTableConfigFlow
+    ) { date, params, config -> Triple(date, params, config) }
+        .flatMapLatest { (date, params, config) ->
+            if (config == null || params.tableId.isEmpty()) {
+                return@flatMapLatest flowOf(emptyMap<String, Pair<List<CourseWithWeeks>, Int>>())
+            }
+
             val window = listOf(
                 date.minus(1, DateTimeUnit.WEEK),
                 date,
@@ -178,24 +203,32 @@ class WeeklyScheduleViewModel (
 
                 val isWithinSemester = pageWeekNum != null && pageWeekNum in 1..config.semesterTotalWeeks
 
-                val coursesFlow = if (settings.showNonCurrentWeekCourses && isWithinSemester) {
-                    courseTableRepository.getCoursesWithWeeksByTableId(tableId).map { allCourses ->
+                val coursesFlow = if (params.showNonCurrentWeekCourses && isWithinSemester) {
+                    allCoursesSharedFlow.map { allCourses ->
                         allCourses.filter { cw ->
                             cw.weeks.any { it.weekNumber >= pageWeekNum }
                         }
                     }
                 } else {
-                    courseTableRepository.getCoursesWithWeeksByDate(tableId, day, config)
+                    courseTableRepository.getCoursesWithWeeksByDate(params.tableId, day, config)
                 }
 
                 coursesFlow.map { courses ->
-                    day.toString() to mergeCourses(courses, slots, pageWeekNum ?: -1, mode)
+                    day.toString() to (courses to (pageWeekNum ?: -1))
                 }
             }) { results -> results.toMap() }
-        } else {
-            flowOf(emptyMap())
         }
-    }.flatMapLatest { it }
+
+    // 合并计算参数：仅节次表与排布模式参与 mergeCourses。
+    // 样式其余字段（尺寸、颜色等）逐帧变化时被 distinctUntilChanged 拦截，不再触发整周重算
+    private val mergeParamsFlow = combine(timeSlotsFlow, styleFlow) { slots, style ->
+        slots to style.scheduleMode
+    }.distinctUntilChanged()
+
+    // 第二层：冲突合并计算。仅在课程数据或合并参数变化时重算
+    private val currentCoursesFlow = combine(courseDataFlow, mergeParamsFlow) { rawMap, (slots, mode) ->
+        rawMap.mapValues { (_, data) -> mergeCourses(data.first, slots, data.second, mode) }
+    }
 
     init {
         viewModelScope.launch {
@@ -234,7 +267,13 @@ class WeeklyScheduleViewModel (
                 } else 0L
 
                 val currentWeekCourses = cache[configPkg.mondayDate.toString()] ?: emptyList()
-                fixInvalidCourseColors(currentWeekCourses.flatMap { it.courses }, configPkg.style)
+
+                // 仅存在颜色越界的历史数据时才启动修复协程，避免每次状态合并都全量扫描
+                val invalidColorCourses = currentWeekCourses.flatMap { it.courses }
+                    .filter { it.course.colorInt !in configPkg.style.courseColorMaps.indices }
+                if (invalidColorCourses.isNotEmpty()) {
+                    fixInvalidCourseColors(invalidColorCourses, configPkg.style)
+                }
 
                 val previousState = _uiState.value
 
@@ -243,7 +282,7 @@ class WeeklyScheduleViewModel (
                     showWeekends = config?.showWeekends ?: false,
                     totalWeeks = totalWeeks,
                     courseCache = cache,
-                    currentMergedCourses = cache[configPkg.mondayDate.toString()] ?: emptyList(),
+                    currentMergedCourses = currentWeekCourses,
                     timeSlots = timeSlots,
                     isSemesterSet = startDate != null,
                     semesterStartDate = startDate,
@@ -293,11 +332,9 @@ class WeeklyScheduleViewModel (
 
     private fun fixInvalidCourseColors(courses: List<CourseWithWeeks>, style: ScheduleGridStyle) {
         viewModelScope.launch {
-            val validRange = style.courseColorMaps.indices
+            // 调用方已过滤出越界课程，这里直接修复
             courses.forEach { cw ->
-                if (cw.course.colorInt !in validRange) {
-                    courseTableRepository.updateCourseColor(cw.course.id, style.generateRandomColorIndex())
-                }
+                courseTableRepository.updateCourseColor(cw.course.id, style.generateRandomColorIndex())
             }
         }
     }

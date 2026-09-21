@@ -126,7 +126,9 @@ fun WeeklyScheduleScreen(
         return current
     }
 
-    LaunchedEffect(pagerState.currentPage, uiState.firstDayOfWeek) {
+    // 仅以 firstDayOfWeek 为 key：currentPage 由内部 snapshotFlow 持续观测，
+    // 放入 key 会导致每次翻页都取消重启本 effect
+    LaunchedEffect(uiState.firstDayOfWeek) {
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { pageIndex ->

@@ -11,15 +11,19 @@ import com.xingheyuzhuan.shiguangschedule.service.DndSchedulerWorker
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import org.koin.core.annotation.Single
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 平台层同步管理器（Android 端）。
  * 仅负责响应共享层 (KMP) 的同步完成信号与 Android 本地样式更新，执行系统 Widget 刷新及 WorkManager 调度。
  */
+@OptIn(FlowPreview::class)
 @Single(createdAtStart = true)
 class SyncManager(
     private val appContext: Context,
@@ -41,7 +45,10 @@ class SyncManager(
             .launchIn(scope)
 
         // 2. 监听 Android 端专属的样式更新事件
+        // 防抖：样式滑块连续拖动会逐帧写 DataStore 并发出事件，
+        // 若每次都全量刷新小组件（查询 14 天数据 + 渲染 5 种规格）会造成刷新风暴
         styleSettingsRepository.styleUpdatedFlow
+            .debounce(300.milliseconds)
             .onEach {
                 Log.d("SyncManager", "收到样式更改通知，正在刷新小组件...")
                 updateAllWidgets(appContext)

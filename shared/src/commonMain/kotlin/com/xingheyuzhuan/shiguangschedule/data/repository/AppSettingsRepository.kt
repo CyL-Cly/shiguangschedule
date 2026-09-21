@@ -11,6 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.DayOfWeek
@@ -63,11 +64,15 @@ class AppSettingsRepository(
 
     /**
      * 获取应用设置数据流。
+     * 数据库兜底 ID 仅在收集开始时查询一次，DataStore 后续发射不再触发 Room 查询
+     * （兜底值取最早创建的课表，与原逐次查询语义一致）。
      */
-    fun getAppSettings(): Flow<AppSettingsModel> = dataStore.data.map { prefs ->
-        val dbFirstTableId = courseTableDao.getFirstTableOnce()?.id ?: ""
-
-        AppSettingsModel.fromPreferences(prefs, dbFirstTableId)
+    fun getAppSettings(): Flow<AppSettingsModel> = flow {
+        emit(courseTableDao.getFirstTableOnce()?.id ?: "")
+    }.flatMapLatest { dbFirstTableId ->
+        dataStore.data.map { prefs ->
+            AppSettingsModel.fromPreferences(prefs, dbFirstTableId)
+        }
     }
 
     /**

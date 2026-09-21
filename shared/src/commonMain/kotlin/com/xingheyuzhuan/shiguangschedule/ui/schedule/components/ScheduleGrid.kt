@@ -55,8 +55,12 @@ fun ScheduleGrid(
         val pageTextColor = style.pageTextColor ?: MaterialTheme.colorScheme.onSurface
         val pageSubTextColor = pageTextColor.copy(alpha = 0.7f)
         val weekDays = stringArrayResource(Res.array.week_days_short_names).toList()
-        val reorderedWeekDays = rearrangeDays(weekDays, viewState.firstDayOfWeek)
-        val displayDays = if (viewState.showWeekends) reorderedWeekDays else reorderedWeekDays.take(5)
+        val reorderedWeekDays = remember(weekDays, viewState.firstDayOfWeek) {
+            rearrangeDays(weekDays, viewState.firstDayOfWeek)
+        }
+        val displayDays = remember(reorderedWeekDays, viewState.showWeekends) {
+            if (viewState.showWeekends) reorderedWeekDays else reorderedWeekDays.take(5)
+        }
 
         val displayDaysCount = displayDays.size
         val is24HourMode = style.scheduleMode == ScheduleModeProto.TIME_24H_MODE
