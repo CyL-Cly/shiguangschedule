@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 周网格课程卡片（高档：>120min 长课）。结构同中档，名称限 4 行 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="144dp"
+    android:layout_margin="1dp"
+    android:id="@+id/course_card_root">
+
+    <ImageView
+        android:id="@+id/card_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/widget_course_card_bg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="5dp">
+
+        <TextView
+            android:id="@+id/tv_card_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="4"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="11dp"
+            android:textStyle="bold"
+            tools:text="毛泽东思想和中国特色社会主义理论体系概论" />
+
+        <TextView
+            android:id="@+id/tv_card_teacher"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="10dp"
+            tools:text="沙广惠" />
+
+        <TextView
+            android:id="@+id/tv_card_position"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="10dp"
+            tools:text="@博学楼A203" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/card_highlight"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/widget_course_card_stroke"
+        android:visibility="gone" />
+</FrameLayout>

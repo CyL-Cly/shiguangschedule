@@ -1,46 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 周网格课程卡片（中档：≤120min）。结构对齐应用内 CourseBlock：整卡课程色块 + 名称/教师/教室 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="96dp"
     android:layout_margin="1dp"
     android:id="@+id/course_card_root">
 
     <ImageView
-        android:id="@+id/course_indicator"
-        android:layout_width="4dp"
+        android:id="@+id/card_bg"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="start"
-        android:src="@drawable/widget_course_card_shape" />
+        android:src="@drawable/widget_course_card_bg" />
 
-    <TextView
-        android:id="@+id/tv_card_name"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="3dp"
-        android:layout_marginEnd="2dp"
-        android:ellipsize="end"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:textColor="@color/widget_text_primary"
-        android:textSize="11dp"
-        android:textStyle="bold"
-        tools:text="高等数学" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="5dp">
 
-    <TextView
-        android:id="@+id/tv_card_position"
+        <TextView
+            android:id="@+id/tv_card_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="3"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="11dp"
+            android:textStyle="bold"
+            tools:text="数字电子技术基础" />
+
+        <TextView
+            android:id="@+id/tv_card_teacher"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="10dp"
+            tools:text="熊春如" />
+
+        <TextView
+            android:id="@+id/tv_card_position"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="10dp"
+            tools:text="@慎思楼B305(多)" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/card_highlight"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginStart="8dp"
-        android:layout_marginBottom="2dp"
-        android:layout_marginEnd="2dp"
-        android:ellipsize="end"
-        android:includeFontPadding="false"
-        android:maxLines="1"
-        android:textColor="@color/widget_text_secondary"
-        android:textSize="10dp"
-        tools:text="教一 101" />
+        android:layout_height="match_parent"
+        android:src="@drawable/widget_course_card_stroke"
+        android:visibility="gone" />
 </FrameLayout>
