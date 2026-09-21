@@ -1,6 +1,5 @@
 package com.xingheyuzhuan.shiguangschedule.data.api.gdou
 
-import com.xingheyuzhuan.shiguangschedule.data.repository.GdouJwxtRepository
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpHeaders
@@ -13,8 +12,7 @@ import kotlin.time.Clock
 
 @Single
 class GdouAuthClient(
-    private val http: GdouHttpClient,
-    private val repo: GdouJwxtRepository
+    private val http: GdouHttpClient
 ) {
     var pendingReauth: GdouReauthParams? = null
         private set
@@ -36,10 +34,6 @@ class GdouAuthClient(
             header(HttpHeaders.Accept, "application/json, text/javascript, */*; q=0.01")
         }
     }
-
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun tryResumeWithCastgc(fingerprint: String): GdouAuthResult =
-        if (warmUp()) GdouAuthResult.LoggedIn else GdouAuthResult.Failed("本地会话不可用")
 
     suspend fun login(
         username: String,
@@ -249,7 +243,7 @@ class GdouAuthClient(
 
     /**
      * 仅当停在 sso 路径（含网关嵌入形态）且存在 30x/页面 meta 跳转时继续跟随；
-     * outboundUrl 会保持网关路径。严禁再访问官方 jw 菜单（校外 TCP 被拒）。
+     * outboundUrl 会保持网关路径。严禁再访问官方 jw 菜单（统一走网关，禁止直连官方域）。
      */
     private suspend fun leaveSso(resp: GdouHttpExchange): GdouHttpExchange {
         var current = resp
@@ -268,49 +262,6 @@ class GdouAuthClient(
             val resp = http.followRedirects(GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_MENU))
             resp.status == 200 && GdouHtml.isJwLoggedIn(resp.url, resp.body)
         }.getOrDefault(false)
-    }
-
-    /**
-     * 网关兜底（仅菜单返回 CAS 页时第二次 CAS POST）：
-     * 用已存学号密码在网关菜单内嵌登录页再次提交，复用已过 MFA 的 CAS 会话。
-     */
-    private suspend fun warmUpGateway(): GdouHttpExchange {
-        val menuUrl = GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_MENU)
-        val menu = http.followRedirects(menuUrl, GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE))
-        if (GdouHtml.isJwLoggedIn(menu.url, menu.body)) return menu
-        if (!GdouHtml.looksLikeLoginPage(menu.url, menu.body)) return menu
-
-        val creds = repo.loadCredentials()
-            ?: error("教务网关需要二次登录，但未保存学号密码")
-        val salt = GdouHtml.attrValue(menu.body, "pwdEncryptSalt")
-            .ifBlank { error("网关登录页缺少 pwdEncryptSalt") }
-        val execution = GdouHtml.attrValue(menu.body, "execution")
-        val lt = GdouHtml.attrValue(menu.body, "lt")
-        val action = GDOU_WFW_PROXY_AUTH_LOGIN + "service=" + encodeService(GDOU_SERVICE_URL)
-        val posted = http.postForm(
-            url = action,
-            fields = mapOf(
-                "username" to creds.username,
-                "password" to GdouPasswordEncryptor.encrypt(creds.password, salt),
-                "captcha" to "",
-                "_eventId" to "submit",
-                "cllt" to "userNameLogin",
-                "dllt" to "generalLogin",
-                "lt" to lt,
-                "execution" to execution
-            ),
-            referer = menuUrl,
-            origin = GDOU_WFW_ORIGIN
-        )
-        val landed = if (posted.status in 301..308 && !posted.location.isNullOrBlank()) {
-            http.followRedirects(posted.location, menuUrl)
-        } else if (GdouHtml.looksLikeLoginPage(posted.url, posted.body)) {
-            GdouHtml.pageError(posted.body).takeIf { it.isNotBlank() }?.let { error(it) }
-            posted
-        } else {
-            posted
-        }
-        return landed
     }
 
     private fun encodeService(service: String): String {

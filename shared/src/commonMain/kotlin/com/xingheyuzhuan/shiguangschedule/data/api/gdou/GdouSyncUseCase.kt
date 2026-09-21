@@ -32,20 +32,9 @@ class GdouSyncUseCase(
             repo.persistCookies()
             return GdouAuthResult.LoggedIn
         }
-        log?.info("本地会话不可用，尝试用本地 CASTGC 恢复统一认证会话")
-        val resumed = auth.tryResumeWithCastgc(fingerprint)
-        if (resumed is GdouAuthResult.LoggedIn) {
-            log?.info("已用本地 CASTGC 恢复统一认证会话")
-            repo.persistCookies()
-            return resumed
-        }
-        if (resumed is GdouAuthResult.NeedMfa) {
-            repo.persistCookies()
-            return if (allowInteractive) resumed else GdouAuthResult.Failed("需要二次认证")
-        }
+        log?.info("本地会话不可用，开始统一身份认证登录")
         repo.clearCookies()
         val creds = repo.loadCredentials() ?: return GdouAuthResult.Failed("未保存学号密码")
-        log?.info("开始统一身份认证登录")
         val logged = auth.login(
             username = creds.username,
             password = creds.password,
@@ -84,7 +73,7 @@ class GdouSyncUseCase(
         http.requestFailureSink = { requestUrl, error ->
             val text = GdouHttpClient.connectivityText(error)
             if (text != null) {
-                log.info("请求 ${GdouHtml.hostOf(requestUrl)} 连接失败（$text），属校外访问预期或网络波动")
+                log.info("请求 ${GdouHtml.hostOf(requestUrl)} 连接失败（$text），可能是网络波动")
             }
         }
         try {

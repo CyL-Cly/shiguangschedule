@@ -193,7 +193,7 @@ class GdouHttpClient {
     fun parseJson(text: String): JsonElement = json.parseToJsonElement(text)
 
     /**
-     * 出站 URL 改写（校外实证协议，唯一权威 E:/code/py/gdoulogin/wfw_login.py）：
+     * 出站 URL 改写（网关协议，唯一权威 E:/code/py/gdoulogin/wfw_login.py）：
      * - 官方 jw → 嵌入 wfw 网关前缀（https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/...）；
      * - authserver.gdou.edu.cn → wfw 网关根同路径（防绝对 Location 直连被拒）；
      * - 其余（wfw 自身等）原样。全程禁止直接访问 jw/authserver 官方域。

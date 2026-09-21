@@ -29,7 +29,7 @@ class GdouLiveLoginProbe {
             )
         }
         try {
-            val auth = GdouAuthClient(http, repo = TODO("live probe: 需注入凭据仓库"))
+            val auth = GdouAuthClient(http)
             var result = auth.login(username, password, fingerprint)
             result = completeMfaIfNeeded(auth, result)
             when (result) {
