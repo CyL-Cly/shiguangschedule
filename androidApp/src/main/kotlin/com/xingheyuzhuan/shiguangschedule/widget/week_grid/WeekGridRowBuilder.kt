@@ -1,9 +1,6 @@
 package com.xingheyuzhuan.shiguangschedule.widget.week_grid
 
 import android.content.Context
-import android.content.res.Configuration
-import android.util.TypedValue
-import android.view.View
 import android.widget.RemoteViews
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
@@ -75,12 +72,6 @@ internal object WeekGridRowBuilder {
         // ListView 回收重用：清空旧行子视图，避免 addView 累积
         rowRv.removeAllViews(R.id.container_row_cells)
 
-        // 行内所有课程共享同一 (start, end)，卡片高度档位由行时长决定（对齐应用内"高度∝时长"）
-        val cardLayout = cardLayoutForPeriod(period)
-        val isNight = (context.resources.configuration.uiMode and
-                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val fontScale = style?.course_block_font_scale ?: 1.0f
-
         weekDays.forEach { day ->
             val dayStr = day.toString()
             // 今天列使用 2 倍宽单元格布局，便于教室文本换行展示
@@ -95,82 +86,32 @@ internal object WeekGridRowBuilder {
             }.forEach { course ->
                 // 清空格子内旧卡片，防止回收重用时累积
                 cellRv.removeAllViews(R.id.cell_content)
-                val cardRv = RemoteViews(context.packageName, cardLayout)
+                val cardRv = RemoteViews(context.packageName, R.layout.widget_week_grid_card)
                 cardRv.setTextViewText(R.id.tv_card_name, course.name)
-
-                // 教师：对齐应用内 hide_teacher 开关
-                if (style?.hide_teacher == true || course.teacher.isBlank()) {
-                    cardRv.setViewVisibility(R.id.tv_card_teacher, View.GONE)
-                } else {
-                    cardRv.setTextViewText(R.id.tv_card_teacher, course.teacher)
-                }
-
-                // 教室：对齐应用内 hide_location / remove_location_at 开关
-                if (style?.hide_location == true || course.position.isBlank()) {
-                    cardRv.setViewVisibility(R.id.tv_card_position, View.GONE)
-                } else {
-                    val prefix = if (style?.remove_location_at == true) "" else "@"
-                    cardRv.setTextViewText(R.id.tv_card_position, "$prefix${course.position}")
-                }
-
-                // 字体缩放：对齐应用内 course_block_font_scale
-                if (fontScale != 1.0f) {
-                    cardRv.setTextViewTextSize(
-                        R.id.tv_card_name, TypedValue.COMPLEX_UNIT_DIP, 11f * fontScale
-                    )
-                    cardRv.setTextViewTextSize(
-                        R.id.tv_card_teacher, TypedValue.COMPLEX_UNIT_DIP, 10f * fontScale
-                    )
-                    cardRv.setTextViewTextSize(
-                        R.id.tv_card_position, TypedValue.COMPLEX_UNIT_DIP, 10f * fontScale
-                    )
-                }
-
-                // 整卡染课程色：对齐应用内浅色模式取 light、深色模式取 dark
-                val colorPair = style?.course_color_maps?.getOrNull(course.color_int)
-                val bgColor = if (colorPair != null) {
-                    (if (isNight) colorPair.dark_color else colorPair.light_color).toInt()
-                } else {
-                    context.getColor(R.color.widget_course_fallback)
-                }
-                cardRv.setInt(R.id.card_bg, "setColorFilter", bgColor)
+                cardRv.setTextViewText(R.id.tv_card_position, course.position)
 
                 if (course.id in highlightCourseIds) {
                     // 当前课/下一节课：整卡描边高亮
-                    cardRv.setViewVisibility(R.id.card_highlight, View.VISIBLE)
+                    cardRv.setInt(
+                        R.id.course_card_root, "setBackgroundResource",
+                        R.drawable.widget_course_card_highlight
+                    )
                 }
 
+                if (style != null && course.color_int < style.course_color_maps.size) {
+                    val colorPair = style.course_color_maps[course.color_int]
+                    cardRv.setInt(R.id.course_indicator, "setColorFilter",
+                        colorPair.light_color.toInt()
+                    )
+                    cardRv.setInt(R.id.course_indicator_dark, "setColorFilter",
+                        colorPair.dark_color.toInt()
+                    )
+                }
                 cellRv.addView(R.id.cell_content, cardRv)
             }
             rowRv.addView(R.id.container_row_cells, cellRv)
         }
         return rowRv
-    }
-
-    /**
-     * 按行时长选择卡片高度档位（RemoteViews 无法动态修改布局高度，以布局变体实现）：
-     * ≤60min 单节课用矮档，≤120min 连堂用中档，更长的高档。
-     */
-    private fun cardLayoutForPeriod(period: Pair<String, String>): Int {
-        val minutes = periodMinutes(period.first, period.second)
-        return when {
-            minutes <= 60 -> R.layout.widget_week_grid_card_short
-            minutes <= 120 -> R.layout.widget_week_grid_card
-            else -> R.layout.widget_week_grid_card_tall
-        }
-    }
-
-    /** "HH:mm[:ss]" 文本时间差（分钟），解析失败按连堂中档处理 */
-    private fun periodMinutes(start: String, end: String): Int {
-        fun toMinutes(t: String): Int? {
-            val parts = t.take(5).split(":")
-            val h = parts.getOrNull(0)?.toIntOrNull() ?: return null
-            val m = parts.getOrNull(1)?.toIntOrNull() ?: return null
-            return h * 60 + m
-        }
-        val s = toMinutes(start)
-        val e = toMinutes(end)
-        return if (s != null && e != null && e > s) e - s else 90
     }
 
     /**
