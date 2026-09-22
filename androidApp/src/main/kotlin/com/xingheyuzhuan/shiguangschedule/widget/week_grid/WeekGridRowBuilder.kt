@@ -86,8 +86,9 @@ internal object WeekGridRowBuilder {
             }.forEach { course ->
                 // 清空格子内旧卡片，防止回收重用时累积
                 cellRv.removeAllViews(R.id.cell_content)
-                // 课程起始于更早时段时，本行仅渲染延续色条，避免留白
-                val isContinuation = course.start_time < startTime
+                // 完整卡仅出现在与课程 (start, end) 完全一致的行；
+                // 其余重叠行以色条延续，同课合并为一列，避免留白或重复
+                val isContinuation = course.start_time != startTime || course.end_time != endTime
                 val cardRv = RemoteViews(
                     context.packageName,
                     if (isContinuation) R.layout.widget_week_grid_card_continuation
@@ -124,7 +125,7 @@ internal object WeekGridRowBuilder {
 
     /**
      * 课程落在本行的判定：日期匹配，且课程时段与行时段重叠
-     * （重叠而非相等，跨时段课程在后续行以延续色条呈现，不留空白）。
+     * （重叠而非相等，跨时段课程在非精确行以延续色条呈现，不留空白）。
      */
     private fun it_dateMatches(
         course: WidgetCourseProto,
