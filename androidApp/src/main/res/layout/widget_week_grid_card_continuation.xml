@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 跨时段课程的延续卡片：课程起始于更早时段时，本行仅以色条延续，避免空白 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="1dp"
+    android:id="@+id/course_card_root">
+
+    <ImageView
+        android:id="@+id/course_indicator"
+        android:layout_width="4dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:src="@drawable/widget_course_card_shape" />
+</FrameLayout>

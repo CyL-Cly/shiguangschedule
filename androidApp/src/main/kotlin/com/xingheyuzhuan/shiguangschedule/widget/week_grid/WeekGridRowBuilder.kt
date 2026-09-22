@@ -81,21 +81,29 @@ internal object WeekGridRowBuilder {
                 else R.layout.widget_week_grid_cell
             )
 
-            weekCourses.filter {
-                it.date == dayStr && it.start_time == startTime && it.end_time == endTime
+            weekCourses.filter { course ->
+                it_dateMatches(course, dayStr, startTime, endTime)
             }.forEach { course ->
                 // 清空格子内旧卡片，防止回收重用时累积
                 cellRv.removeAllViews(R.id.cell_content)
-                val cardRv = RemoteViews(context.packageName, R.layout.widget_week_grid_card)
-                cardRv.setTextViewText(R.id.tv_card_name, course.name)
-                cardRv.setTextViewText(R.id.tv_card_position, course.position)
+                // 课程起始于更早时段时，本行仅渲染延续色条，避免留白
+                val isContinuation = course.start_time < startTime
+                val cardRv = RemoteViews(
+                    context.packageName,
+                    if (isContinuation) R.layout.widget_week_grid_card_continuation
+                    else R.layout.widget_week_grid_card
+                )
+                if (!isContinuation) {
+                    cardRv.setTextViewText(R.id.tv_card_name, course.name)
+                    cardRv.setTextViewText(R.id.tv_card_position, course.position)
 
-                if (course.id in highlightCourseIds) {
-                    // 当前课/下一节课：整卡描边高亮
-                    cardRv.setInt(
-                        R.id.course_card_root, "setBackgroundResource",
-                        R.drawable.widget_course_card_highlight
-                    )
+                    if (course.id in highlightCourseIds) {
+                        // 当前课/下一节课：整卡描边高亮
+                        cardRv.setInt(
+                            R.id.course_card_root, "setBackgroundResource",
+                            R.drawable.widget_course_card_highlight
+                        )
+                    }
                 }
 
                 if (style != null && course.color_int < style.course_color_maps.size) {
@@ -113,6 +121,20 @@ internal object WeekGridRowBuilder {
         }
         return rowRv
     }
+
+    /**
+     * 课程落在本行的判定：日期匹配，且课程时段与行时段重叠
+     * （重叠而非相等，跨时段课程在后续行以延续色条呈现，不留空白）。
+     */
+    private fun it_dateMatches(
+        course: WidgetCourseProto,
+        dayStr: String,
+        rowStart: String,
+        rowEnd: String,
+    ): Boolean =
+        course.date == dayStr &&
+            course.start_time < rowEnd &&
+            course.end_time > rowStart
 
     /**
      * 与渲染器一致的数据行过滤规则：
