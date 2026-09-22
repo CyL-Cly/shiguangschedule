@@ -86,40 +86,6 @@ class GdouKbListParserTest {
         assertEquals(2, info?.totalWeeks)
     }
 
-    @Test
-    fun htmlHelpers() {
-        val html = """<input id="pwdEncryptSalt" value="VZiVkGRaRIWMt7ea"/><input id="execution" value="e1s1"/>"""
-        assertEquals("VZiVkGRaRIWMt7ea", GdouHtml.attrValue(html, "pwdEncryptSalt"))
-        assertEquals("e1s1", GdouHtml.attrValue(html, "execution"))
-        assertEquals(
-            "https://authserver.gdou.edu.cn/authserver/login",
-            GdouHtml.forceHttps("http://authserver.gdou.edu.cn/authserver/login")
-        )
-        assertEquals(
-            "https://jw.gdou.edu.cn/sso/jziotlogin",
-            GdouHtml.forceHttps("http://jw.gdou.edu.cn/sso/jziotlogin")
-        )
-        assertTrue(GdouHtml.isSsoPath("https://jw.gdou.edu.cn/sso/jziotlogin?ticket=ST-1"))
-        assertFalse(GdouHtml.isJwLoggedIn("https://jw.gdou.edu.cn/sso/jziotlogin?ticket=ST-1"))
-        assertFalse(GdouHtml.isJwLoggedIn("https://jw.gdou.edu.cn/xtgl/index_initMenu.html?jsdm=xs"))
-        assertTrue(
-            GdouHtml.isJwLoggedIn(
-                "https://jw.gdou.edu.cn/xtgl/index_initMenu.html?jsdm=xs",
-                """<script>var sessionUserKey = "u1";</script>"""
-            )
-        )
-        assertEquals(
-            "/xtgl/index_initMenu.html",
-            GdouHtml.pathOf("https://jw.gdou.edu.cn/xtgl/index_initMenu.html?jsdm=xs")
-        )
-        assertEquals(
-            "https://jw.gdou.edu.cn/xtgl/index_initMenu.html?jsdm=xs",
-            GdouHtml.htmlRedirect("""<script>window.location.href='https://jw.gdou.edu.cn/xtgl/index_initMenu.html?jsdm=xs'</script>""")
-        )
-        assertTrue(GdouHtml.looksLikeLoginPage("https://jw.gdou.edu.cn/sso/jziotlogin", ""))
-        assertFalse(GdouHtml.isSsoPath("https://jw.gdou.edu.cn/xtgl/index_initMenu.html"))
-    }
-
     private fun course(position: String, start: Int, end: Int) =
         com.xingheyuzhuan.shiguangschedule.data.model.CourseImportExport.ImportCourseJsonModel(
             name = "课",

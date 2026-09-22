@@ -140,4 +140,36 @@ class GdouHtmlTest {
             GdouHtml.resolveUrl("$GDOU_JW_BASE/xtgl/index.html", "/sso/jziotlogin")
         )
     }
+
+    @Test
+    fun attrValue_readsSaltAndExecution() {
+        val html = """<input id="pwdEncryptSalt" value="VZiVkGRaRIWMt7ea"/><input id="execution" value="e1s1"/>"""
+        assertEquals("VZiVkGRaRIWMt7ea", GdouHtml.attrValue(html, "pwdEncryptSalt"))
+        assertEquals("e1s1", GdouHtml.attrValue(html, "execution"))
+    }
+
+    @Test
+    fun pathOf_extractsPathWithoutQuery() {
+        assertEquals(
+            "/xtgl/index_initMenu.html",
+            GdouHtml.pathOf("$GDOU_JW_BASE/xtgl/index_initMenu.html?jsdm=xs")
+        )
+    }
+
+    @Test
+    fun htmlRedirect_extractsJsLocation() {
+        val target = "$GDOU_WFW_GATEWAY_PREFIX/xtgl/index_initMenu.html?jsdm=xs"
+        assertEquals(
+            target,
+            GdouHtml.htmlRedirect("""<script>window.location.href='$target'</script>""")
+        )
+    }
+
+    @Test
+    fun looksLikeLoginPage_andIsSsoPath_onGatewaySso() {
+        val sso = "$GDOU_WFW_GATEWAY_PREFIX/sso/jziotlogin"
+        assertTrue(GdouHtml.looksLikeLoginPage(sso, ""))
+        assertTrue(GdouHtml.isSsoPath("$sso?ticket=ST-1"))
+        assertFalse(GdouHtml.isSsoPath("$GDOU_WFW_GATEWAY_PREFIX/xtgl/index_initMenu.html"))
+    }
 }
