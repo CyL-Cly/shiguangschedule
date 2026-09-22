@@ -116,6 +116,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.sqlite.framework)
             implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.okhttp)
             implementation(libs.okhttp)
             implementation(libs.androidx.work.runtime.ktx)
             implementation(libs.koin.android)
@@ -126,6 +127,7 @@ kotlin {
             jvmMain.dependencies {
                 implementation(libs.androidx.sqlite.bundled)
                 implementation(libs.ktor.client.cio)
+                implementation(libs.ktor.client.okhttp)
             }
 
             iosMain.dependencies {

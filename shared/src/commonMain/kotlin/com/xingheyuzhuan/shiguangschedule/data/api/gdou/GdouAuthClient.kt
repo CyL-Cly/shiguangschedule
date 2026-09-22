@@ -8,7 +8,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.core.annotation.Single
-import kotlin.time.Clock
 
 @Single
 class GdouAuthClient(
@@ -29,7 +28,7 @@ class GdouAuthClient(
         val effectiveReferer = referer ?: GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE)
         http.get("$GDOU_JW_BASE/authserver/bfp/info", effectiveReferer) {
             parameter("bfp", fingerprint)
-            parameter("_", Clock.System.now().toEpochMilliseconds())
+            parameter("_", fingerprint.take(12))
             header("X-Requested-With", "XMLHttpRequest")
             header(HttpHeaders.Accept, "application/json, text/javascript, */*; q=0.01")
         }

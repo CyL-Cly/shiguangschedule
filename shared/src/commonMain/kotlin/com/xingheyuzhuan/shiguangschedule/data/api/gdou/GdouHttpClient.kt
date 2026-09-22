@@ -41,7 +41,7 @@ class GdouHttpClient {
     /** 请求连接类失败通知钩子：(requestUrl, error)，覆盖所有 host（jw/authserver/wfw），供同步日志记录明细。 */
     internal var requestFailureSink: ((String, Throwable) -> Unit)? = null
 
-    val client: HttpClient = HttpClient {
+    val client: HttpClient = HttpClient(gdouHttpEngine()) {
         followRedirects = false
         expectSuccess = false
         install(HttpTimeout) {
