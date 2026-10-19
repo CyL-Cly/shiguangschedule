@@ -74,7 +74,11 @@ fun App() {
             }
             val updateController: AppUpdateController = koinInject()
             val updateState by updateController.state.collectAsState()
-            LaunchedEffect(Unit) { updateController.checkOnStartup() }
+            // 仅当用户在设置中开启"启动时检查更新"时，才在启动阶段执行一次静默检查
+            val checkUpdateOnStartup = state.appSettings.checkUpdateOnStartup
+            LaunchedEffect(Unit) {
+                if (checkUpdateOnStartup) updateController.checkOnStartup()
+            }
             AppNavigation(startDestination = startDest)
             AppUpdateOverlay(
                 state = updateState,

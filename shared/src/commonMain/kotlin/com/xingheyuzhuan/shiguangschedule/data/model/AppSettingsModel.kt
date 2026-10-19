@@ -118,6 +118,9 @@ data class AppSettingsModel(
 
     /** 开发者功能总开关（默认关闭） */
     val developerModeEnabled: Boolean = false,
+
+    /** 是否在应用启动时静默检查更新（默认开启） */
+    val checkUpdateOnStartup: Boolean = true,
 ) {
     /**
      * 将 DataStore 的 Key 定义在伴生对象中。
@@ -139,6 +142,7 @@ data class AppSettingsModel(
         val KEY_CUSTOM_LIGHT_PRIMARY = longPreferencesKey("custom_light_primary")
         val KEY_CUSTOM_DARK_PRIMARY = longPreferencesKey("custom_dark_primary")
         val KEY_DEVELOPER_MODE_ENABLED = booleanPreferencesKey("developer_mode_enabled")
+        val KEY_CHECK_UPDATE_ON_STARTUP = booleanPreferencesKey("check_update_on_startup")
 
         /**
          * 从 Preferences 中解析出 AppSettingsModel
@@ -160,6 +164,7 @@ data class AppSettingsModel(
                 customLightPrimary = prefs[KEY_CUSTOM_LIGHT_PRIMARY] ?: d.customLightPrimary,
                 customDarkPrimary = prefs[KEY_CUSTOM_DARK_PRIMARY] ?: d.customDarkPrimary,
                 developerModeEnabled = prefs[KEY_DEVELOPER_MODE_ENABLED] ?: d.developerModeEnabled,
+                checkUpdateOnStartup = prefs[KEY_CHECK_UPDATE_ON_STARTUP] ?: d.checkUpdateOnStartup,
             )
         }
     }

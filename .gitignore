@@ -16,6 +16,7 @@ output-metadata.json
 
 *.jks
 *.keystore
+keystore/keystore.properties
 google-services.json
 
 *.iml

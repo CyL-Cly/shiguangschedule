@@ -121,6 +121,8 @@ jobs:
       - name: 运行 Release 构建任务 (Build Release APK)
         run: |
           chmod +x ./gradlew
+          # Same key as keystore/shiguangschedule.jks (see keystore/README.txt).
+          # Injected props override androidApp signingConfigs.release.
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file="${{ github.workspace }}/androidApp/release.jks" \
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \

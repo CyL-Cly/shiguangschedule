@@ -335,6 +335,7 @@
     <string name="label_version_prefix">Version: %1$s</string>
     <string name="default_app_name">Unknown app</string>
     <string name="item_check_software_update">Check for Software Updates</string>
+    <string name="item_check_update_on_startup">Check for updates on startup</string>
     <string name="item_language_settings">Language Settings</string>
     <string name="language_follow_system">Follow System</string>
 

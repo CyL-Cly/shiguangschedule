@@ -331,6 +331,7 @@
     <string name="label_version_prefix">版本: %1$s</string>
     <string name="default_app_name">未知應用程式</string>
     <string name="item_check_software_update">檢查軟體更新</string>
+    <string name="item_check_update_on_startup">啟動時檢查更新</string>
     <string name="item_language_settings">語言設定</string>
     <string name="language_follow_system">跟隨系統</string>
 

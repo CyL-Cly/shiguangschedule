@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -53,6 +54,7 @@ import shiguangschedule.shared.generated.resources.arrow_back_24px
 import shiguangschedule.shared.generated.resources.code_24px
 import shiguangschedule.shared.generated.resources.home_24px
 import shiguangschedule.shared.generated.resources.item_check_software_update
+import shiguangschedule.shared.generated.resources.item_check_update_on_startup
 import shiguangschedule.shared.generated.resources.item_contributors
 import shiguangschedule.shared.generated.resources.item_gdou_sync_log
 import shiguangschedule.shared.generated.resources.item_github_repo
@@ -187,6 +189,21 @@ fun MoreOptionsScreen(
                         icon = vectorResource(Res.drawable.update_24px),
                         title = stringResource(Res.string.item_check_software_update),
                         onClick = { updateController.checkManual() }
+                    )
+
+                    // 启动时检查更新（可关闭）
+                    SettingListItem(
+                        icon = vectorResource(Res.drawable.update_24px),
+                        title = stringResource(Res.string.item_check_update_on_startup),
+                        onClick = {
+                            viewModel.onCheckUpdateOnStartupChanged(!uiState.appSettings.checkUpdateOnStartup)
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.appSettings.checkUpdateOnStartup,
+                                onCheckedChange = { viewModel.onCheckUpdateOnStartupChanged(it) }
+                            )
+                        }
                     )
 
                     // 语言切换 (导航至独立页面)

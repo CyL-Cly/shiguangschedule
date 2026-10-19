@@ -231,4 +231,15 @@ class SettingsViewModel(
             appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
         }
     }
+
+    /**
+     * 更新"启动时检查更新"开关状态
+     */
+    fun onCheckUpdateOnStartupChanged(enabled: Boolean) {
+        viewModelScope.launch {
+            val currentSettings = uiState.value.appSettings
+            val updatedSettings = currentSettings.copy(checkUpdateOnStartup = enabled)
+            appSettingsRepository.insertOrUpdateAppSettings(updatedSettings)
+        }
+    }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.RemoteViews
 import com.xingheyuzhuan.shiguangschedule.R
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
+import com.xingheyuzhuan.shiguangschedule.widget.WeekGridPeriods
 import com.xingheyuzhuan.shiguangschedule.widget.WidgetCourseProto
 import java.time.LocalDate
 
@@ -154,14 +155,14 @@ internal object WeekGridRowBuilder {
     }
 
     /**
-     * 时间轴：提取去重后的 (start_time, end_time) 组合并按开始时间排序，最多 [MAX_PERIODS] 条。
+     * 时间轴：按出现次数投票出标准时段，早上课/早下课并入其重叠的唯一标准行，
+     * 最多 [MAX_PERIODS] 条。见 [WeekGridPeriods]。
      */
     fun extractPeriods(weekCourses: List<WidgetCourseProto>): List<Pair<String, String>> =
-        weekCourses
-            .map { it.start_time to it.end_time }
-            .distinct()
-            .sortedBy { it.first }
-            .take(MAX_PERIODS)
+        WeekGridPeriods.canonicalPeriods(
+            weekCourses.map { it.start_time to it.end_time },
+            MAX_PERIODS
+        )
 
     /**
      * 计算高亮课程 id 集合：
