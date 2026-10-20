@@ -1,4 +1,5 @@
 import com.android.build.api.variant.FilterConfiguration
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,14 +20,14 @@ android {
         applicationId = "com.xingheyuzhuan.shiguangschedule"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 51
-        versionName = "2.1.20"
+        versionCode = 52
+        versionName = "2.1.21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     val keystorePropertiesFile = rootProject.file("keystore/keystore.properties")
-    val keystoreProperties = java.util.Properties()
+    val keystoreProperties = Properties()
     if (keystorePropertiesFile.exists()) {
         keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
     }

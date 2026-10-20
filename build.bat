@@ -193,11 +193,8 @@ rem ---------- build failure: roll the version bump back ----------
 :failed
 if defined BUMPED call :rollback_version
 echo.
-if defined BUMPED (
-    echo [FAILED] Build error, version bumped back to %OLD_NAME% (code %OLD_CODE%).
-) else (
-    echo [FAILED] Build error.
-)
+if defined BUMPED echo [FAILED] Build error, version bumped back to %OLD_NAME% (code %OLD_CODE%).
+if not defined BUMPED echo [FAILED] Build error.
 echo          See log: %PROJECT_DIR%build.log
 echo.
 echo If incremental cache is corrupted (kspCaches / kotlin / desugar_graph),

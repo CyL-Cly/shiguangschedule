@@ -1,7 +1,7 @@
 {
-  "versionCode": 51,
-  "versionName": "2.1.20",
-  "downloadUrl": "https://a8aa4e60c8d63f44b.gz5.agentos-app.net/f/XOFZ/shiguangschedule-v2.1.20-arm64-v8a-release.apk",
+  "versionCode": 52,
+  "versionName": "2.1.21",
+  "downloadUrl": "https://a8aa4e60c8d63f44b.gz5.agentos-app.net/f/dRBU6/shiguangschedule-v2.1.21-arm64-v8a-release.apk",
   "releaseNotes": "修复校外网络环境下无法登录教务系统的问题（HTTP 引擎切换为 OkHttp 并优先解析 IPv4 地址）",
   "fileSize": 4121943
 }
