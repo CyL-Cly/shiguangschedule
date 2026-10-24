@@ -2,12 +2,8 @@ package com.xingheyuzhuan.shiguangschedule.data.sync
 
 import android.content.Context
 import android.util.Log
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
-import com.xingheyuzhuan.shiguangschedule.service.CourseNotificationWorker
-import com.xingheyuzhuan.shiguangschedule.service.DndSchedulerWorker
+import com.xingheyuzhuan.shiguangschedule.service.ReminderScheduler
 import com.xingheyuzhuan.shiguangschedule.widget.updateAllWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,8 +34,7 @@ class SyncManager(
         widgetDataSynchronizer.syncCompletedFlow
             .onEach {
                 Log.d("SyncManager", "收到共享层同步完成通知，正在调度 Worker 任务及刷新小组件...")
-                triggerNotificationWorker()
-                DndSchedulerWorker.enqueueWork(appContext)
+                ReminderScheduler.reschedule(appContext)
                 updateAllWidgets(appContext)
             }
             .launchIn(scope)
@@ -56,14 +51,5 @@ class SyncManager(
             .launchIn(scope)
 
         Log.d("SyncManager", "Android 平台同步调度器初始化完毕。")
-    }
-
-    private fun triggerNotificationWorker() {
-        val workRequest = OneTimeWorkRequestBuilder<CourseNotificationWorker>().build()
-        WorkManager.getInstance(appContext).enqueueUniqueWork(
-            "CourseNotificationWorker_Sync_Update",
-            ExistingWorkPolicy.REPLACE,
-            workRequest
-        )
     }
 }

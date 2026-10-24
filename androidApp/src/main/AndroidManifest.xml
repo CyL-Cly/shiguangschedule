@@ -51,6 +51,17 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- 重启后补排提醒闹钟；用户补授精确闹钟权限后也补排一次 -->
+        <receiver
+            android:name=".service.ReminderRescheduleReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".widget.tiny.TinyNativeProvider"
             android:label="@string/widget_name_tiny"
