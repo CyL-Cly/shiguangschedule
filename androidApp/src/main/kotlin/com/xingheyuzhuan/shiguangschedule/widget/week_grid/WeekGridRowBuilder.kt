@@ -3,6 +3,7 @@ package com.xingheyuzhuan.shiguangschedule.widget.week_grid
 import android.content.Context
 import android.widget.RemoteViews
 import com.xingheyuzhuan.shiguangschedule.R
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetTimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.schedule_style.ScheduleGridStyleProto
 import com.xingheyuzhuan.shiguangschedule.widget.WeekGridPeriods
 import com.xingheyuzhuan.shiguangschedule.widget.WidgetCourseProto
@@ -55,8 +56,13 @@ internal object WeekGridRowBuilder {
     /**
      * 构建单条数据行：时间标签 + 5 个课程单元格。
      *
+     * 课程落位与应用内网格对齐：归属行（见 [WeekGridPeriods.mapRowStart]）等于本行的课程
+     * 显示完整卡片（名称 + 教室，含高亮）；归属行早于本行且尚未下课的课程以色条延续；
+     * 其余课程不在本行渲染。早上课 / 早下课课程已在归属计算中就近并入标准行。
+     *
      * @param period 时间段 (start_time, end_time)，已去重排序
      * @param weekCourses 已按窗口与 is_skipped 过滤的课程列表
+     * @param rowStartByCourseId 课程 id → 归属行开始时间，由 Factory 一次性算好缓存
      */
     fun buildDataRow(
         context: Context,
@@ -66,8 +72,9 @@ internal object WeekGridRowBuilder {
         weekCourses: List<WidgetCourseProto>,
         style: ScheduleGridStyleProto?,
         highlightCourseIds: Set<String> = emptySet(),
+        rowStartByCourseId: Map<String, String> = emptyMap(),
     ): RemoteViews {
-        val (startTime, endTime) = period
+        val startTime = period.first
         val rowRv = RemoteViews(context.packageName, R.layout.widget_week_grid_row)
         rowRv.setTextViewText(R.id.tv_time_label, startTime.take(5))
         // ListView 回收重用：清空旧行子视图，避免 addView 累积
@@ -82,14 +89,22 @@ internal object WeekGridRowBuilder {
                 else R.layout.widget_week_grid_cell
             )
 
-            weekCourses.filter { course ->
-                it_dateMatches(course, dayStr, startTime, endTime)
-            }.forEach { course ->
-                // 清空格子内旧卡片，防止回收重用时累积
-                cellRv.removeAllViews(R.id.cell_content)
-                // 完整卡仅出现在与课程 (start, end) 完全一致的行；
-                // 其余重叠行以色条延续，同课合并为一列，避免留白或重复
-                val isContinuation = course.start_time != startTime || course.end_time != endTime
+            // 清空格子内旧卡片必须在本日所有课程渲染之前做一次，
+            // 放到循环里会让同格多门课互相覆盖，只剩最后一门（多节连排的同一行会丢课）
+            cellRv.removeAllViews(R.id.cell_content)
+
+            weekCourses.mapNotNull { course ->
+                if (course.date != dayStr) return@mapNotNull null
+                when (val courseRowStart = rowStartByCourseId[course.id] ?: course.start_time) {
+                    startTime -> course to false
+                    else -> if (courseRowStart < startTime && course.end_time > startTime) {
+                        course to true
+                    } else {
+                        null
+                    }
+                }
+            }.forEach { (course, isContinuation) ->
+                // 归属行渲染完整卡；跨行课程在后续行以色条延续，同课合并为一列，避免留白或重复
                 val cardRv = RemoteViews(
                     context.packageName,
                     if (isContinuation) R.layout.widget_week_grid_card_continuation
@@ -125,20 +140,6 @@ internal object WeekGridRowBuilder {
     }
 
     /**
-     * 课程落在本行的判定：日期匹配，且课程时段与行时段重叠
-     * （重叠而非相等，跨时段课程在非精确行以延续色条呈现，不留空白）。
-     */
-    private fun it_dateMatches(
-        course: WidgetCourseProto,
-        dayStr: String,
-        rowStart: String,
-        rowEnd: String,
-    ): Boolean =
-        course.date == dayStr &&
-            course.start_time < rowEnd &&
-            course.end_time > rowStart
-
-    /**
      * 与渲染器一致的数据行过滤规则：
      * 排除 is_skipped、排除日期为空的课程，仅保留落在 [today, today+5) 窗口内的课程。
      */
@@ -155,14 +156,33 @@ internal object WeekGridRowBuilder {
     }
 
     /**
-     * 时间轴：按出现次数投票出标准时段，早上课/早下课并入其重叠的唯一标准行，
-     * 最多 [MAX_PERIODS] 条。见 [WeekGridPeriods]。
+     * 时间轴：优先以节次表为行基准（早上课/早下课就近并入标准行），
+     * 节次表缺失时按出现次数投票兜底，最多 [MAX_PERIODS] 条。见 [WeekGridPeriods]。
      */
-    fun extractPeriods(weekCourses: List<WidgetCourseProto>): List<Pair<String, String>> =
-        WeekGridPeriods.canonicalPeriods(
+    fun extractPeriods(
+        weekCourses: List<WidgetCourseProto>,
+        slots: List<WidgetTimeSlot>,
+    ): List<Pair<String, String>> =
+        WeekGridPeriods.buildRows(
             weekCourses.map { it.start_time to it.end_time },
+            slots,
             MAX_PERIODS
         )
+
+    /**
+     * 课程 id → 归属行开始时间，供 [buildDataRow] 判定整卡 / 延续色条。
+     */
+    fun computeRowStartByCourseId(
+        weekCourses: List<WidgetCourseProto>,
+        periods: List<Pair<String, String>>,
+        slots: List<WidgetTimeSlot>,
+    ): Map<String, String> = weekCourses.associate { course ->
+        course.id to WeekGridPeriods.mapRowStart(
+            course.start_time to course.end_time,
+            periods,
+            slots
+        )
+    }
 
     /**
      * 计算高亮课程 id 集合：

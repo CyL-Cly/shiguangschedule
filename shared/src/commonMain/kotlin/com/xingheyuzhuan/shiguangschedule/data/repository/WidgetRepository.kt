@@ -4,6 +4,8 @@ import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettingsDao
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourseDao
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetTimeSlot
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetTimeSlotDao
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,7 +27,8 @@ import kotlin.time.Clock
 @Single
 class WidgetRepository(
     private val widgetCourseDao: WidgetCourseDao,
-    private val widgetAppSettingsDao: WidgetAppSettingsDao
+    private val widgetAppSettingsDao: WidgetAppSettingsDao,
+    private val widgetTimeSlotDao: WidgetTimeSlotDao
 ) {
 
     private val _dataUpdatedChannel = Channel<Unit>(Channel.CONFLATED)
@@ -47,10 +50,35 @@ class WidgetRepository(
     }
 
     /**
-     * 删除所有 Widget 课程。
+     * 删除所有 Widget 课程与节次表。
      */
     suspend fun deleteAll() {
         widgetCourseDao.deleteAll()
+        widgetTimeSlotDao.deleteAll()
+        _dataUpdatedChannel.trySend(Unit)
+    }
+
+    /**
+     * 仅删除 Widget 课程，保留节次表。
+     * 同步流程重写课程时使用，避免误清刚同步好的节次基准。
+     */
+    suspend fun deleteAllCourses() {
+        widgetCourseDao.deleteAll()
+        _dataUpdatedChannel.trySend(Unit)
+    }
+
+    /**
+     * 获取当前课表的节次表（按节次序号升序）。
+     */
+    fun getTimeSlots(): Flow<List<WidgetTimeSlot>> {
+        return widgetTimeSlotDao.getTimeSlots()
+    }
+
+    /**
+     * 整体重写 Widget 节次表；清空与插入由 DAO 的 `replaceAll` 在同一事务内完成。
+     */
+    suspend fun replaceTimeSlots(slots: List<WidgetTimeSlot>) {
+        widgetTimeSlotDao.replaceAll(slots)
         _dataUpdatedChannel.trySend(Unit)
     }
 

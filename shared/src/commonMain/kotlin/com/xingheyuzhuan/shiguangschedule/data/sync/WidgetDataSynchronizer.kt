@@ -5,6 +5,7 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
 import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetAppSettings
 import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetCourse
+import com.xingheyuzhuan.shiguangschedule.data.db.widget.WidgetTimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.AppSettingsModel
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
@@ -191,6 +192,17 @@ class WidgetDataSynchronizer(
         )
         widgetRepository.insertOrUpdateAppSettings(widgetSettings)
 
+        // 同步节次表：小组件时间轴行与应用内网格共用同一行基准
+        widgetRepository.replaceTimeSlots(
+            timeSlots.map { slot ->
+                WidgetTimeSlot(
+                    number = slot.number,
+                    startTime = slot.startTime,
+                    endTime = slot.endTime
+                )
+            }
+        )
+
         val skippedDates = appSettings.skippedDates
         val timeSlotMap = timeSlots.associateBy { it.number }
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -270,8 +282,9 @@ class WidgetDataSynchronizer(
             }
         }
 
-        // 刷新 Widget 数据库：先清空旧数据，再批量插入新计算的课程
-        widgetRepository.deleteAll()
+        // 刷新 Widget 数据库：先清空旧课程，再批量插入新计算的课程。
+        // 这里不能调用 deleteAll()：它会连同上文刚写入的节次表一起清空
+        widgetRepository.deleteAllCourses()
         if (widgetCourses.isNotEmpty()) {
             widgetRepository.insertAll(widgetCourses)
         }

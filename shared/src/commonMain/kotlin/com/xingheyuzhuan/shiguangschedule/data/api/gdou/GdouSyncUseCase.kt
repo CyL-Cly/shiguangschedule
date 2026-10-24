@@ -107,12 +107,18 @@ class GdouSyncUseCase(
         suspend fun importSchedule(): GdouSyncResult {
             val fetched = schedule.fetch(term)
             log.info("课表接口返回 ${fetched.courses.size} 条记录")
+            // 被跳过的记录只是解析时丢弃的个别行，整体同步仍然成功，用 INFO 而非 ERROR，
+            // 否则日志面板会把「有一条课没导入」误读成「同步失败」
+            fetched.skipped.forEach { log.info(it) }
             if (fetched.courses.isEmpty()) {
                 return fail(log, "未查询到课表，请核对学年学期或登录状态", retryable = false, source)
             }
-            conversion.importCoursesFromList(targetTable, fetched.courses)
-            conversion.importCourseConfig(targetTable, GdouKbListParser.configFrom(fetched.semester, fetched.courses))
+            // 必须先写入时间段，再导入课程：导入时按时间段范围夹取节次，
+            // 若先导入课程，首次同步时时间段表为空，越界节次无法被收敛，
+            // 渲染层会因匹配不到时间段而静默丢弃该课程。
             conversion.importTimeSlots(targetTable, GdouYangjiangTimetable.timeSlots)
+            conversion.importCoursesFromList(targetTable, fetched.courses).forEach { log.info(it) }
+            conversion.importCourseConfig(targetTable, GdouKbListParser.configFrom(fetched.semester, fetched.courses))
             repo.persistCookies()
             val message = buildString {
                 append("已导入 ${fetched.courses.size} 门课")

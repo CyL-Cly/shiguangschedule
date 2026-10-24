@@ -5,7 +5,9 @@ import org.koin.core.annotation.Single
 
 data class GdouFetchedSchedule(
     val courses: List<ImportCourseJsonModel>,
-    val semester: GdouSemesterInfo?
+    val semester: GdouSemesterInfo?,
+    /** 解析阶段被丢弃的记录说明，用于同步日志诊断课程缺失 */
+    val skipped: List<String> = emptyList()
 )
 
 @Single
@@ -50,9 +52,9 @@ class GdouScheduleClient(
         if (GdouHtml.looksLikeLoginPage(courseResp.url, courseResp.body)) {
             error("教务会话已过期")
         }
-        val courses = GdouKbListParser.parseCourses(courseResp.body)
+        val (courses, skipped) = GdouKbListParser.parseCoursesWithDiagnostics(courseResp.body)
         val semester = runCatching { fetchSemester(term) }.getOrNull()
-        return GdouFetchedSchedule(courses, semester)
+        return GdouFetchedSchedule(courses, semester, skipped)
     }
 
     private suspend fun fetchSemester(term: GdouTerm): GdouSemesterInfo? {

@@ -16,7 +16,8 @@ output-metadata.json
 
 *.jks
 *.keystore
-keystore/keystore.properties
+# 签名材料全部只留本地：keystore.properties 含明文口令，README 含口令与指纹
+keystore/
 google-services.json
 
 *.iml
@@ -36,6 +37,9 @@ xcuserdata/
 **/xcshareddata/WorkspaceSettings.xcsettings
 
 node_modules/
+
+# CodeBuddy 已于 2026-10-21 弃用并移至 E:/backup，本地产物不入库
+.codebuddy/
 
 publish.exe
 publish.config.json

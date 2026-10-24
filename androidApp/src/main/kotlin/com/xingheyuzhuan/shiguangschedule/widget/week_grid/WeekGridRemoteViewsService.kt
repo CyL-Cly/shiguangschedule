@@ -46,6 +46,7 @@ class WeekGridRemoteViewsService : RemoteViewsService() {
         private var weekCourses: List<WidgetCourseProto> = emptyList()
         private var style: ScheduleGridStyleProto? = null
         private var highlightIds: Set<String> = emptySet()
+        private var rowStartByCourseId: Map<String, String> = emptyMap()
 
         override fun onCreate() {}
 
@@ -57,8 +58,9 @@ class WeekGridRemoteViewsService : RemoteViewsService() {
             try {
                 val today = LocalDate.now()
 
-                // 两个读取在同一 runBlocking 内并发执行，缩短 Factory 首次填充耗时
-                val (dbCourses, fetchedStyle) = runBlocking {
+                // 三个读取在同一 runBlocking 内并发执行，缩短 Factory 首次填充耗时；
+                // 节次表读取超时降级为空列表，行生成退化为投票兜底
+                val (dbCourses, fetchedStyle, fetchedSlots) = runBlocking {
                     val coursesDeferred = async {
                         withTimeoutOrNull(3.seconds) {
                             repository.getWidgetCoursesByDateRange(
@@ -70,7 +72,14 @@ class WeekGridRemoteViewsService : RemoteViewsService() {
                     val styleDeferred = async {
                         withTimeoutOrNull(2.seconds) { styleDataStore.data.first() }
                     }
-                    (coursesDeferred.await() ?: emptyList()) to styleDeferred.await()
+                    val slotsDeferred = async {
+                        withTimeoutOrNull(2.seconds) { repository.getTimeSlots().first() }
+                    }
+                    Triple(
+                        coursesDeferred.await() ?: emptyList(),
+                        styleDeferred.await(),
+                        slotsDeferred.await() ?: emptyList()
+                    )
                 }
 
                 weekCourses = WeekGridRowBuilder.filterWeekCourses(
@@ -94,13 +103,17 @@ class WeekGridRemoteViewsService : RemoteViewsService() {
                     ?.takeIf { it.course_color_maps.isNotEmpty() }
                     ?: ScheduleGridStyle.DEFAULT.toProto()
 
-                periods = WeekGridRowBuilder.extractPeriods(weekCourses)
+                periods = WeekGridRowBuilder.extractPeriods(weekCourses, fetchedSlots)
+                rowStartByCourseId = WeekGridRowBuilder.computeRowStartByCourseId(
+                    weekCourses, periods, fetchedSlots
+                )
                 highlightIds = WeekGridRowBuilder.computeHighlightCourseIds(
                     weekCourses, java.time.LocalDateTime.now()
                 )
             } catch (_: Exception) {
                 periods = emptyList()
                 weekCourses = emptyList()
+                rowStartByCourseId = emptyMap()
             }
         }
 
@@ -117,7 +130,8 @@ class WeekGridRemoteViewsService : RemoteViewsService() {
                 today = LocalDate.now(),
                 weekCourses = weekCourses,
                 style = style,
-                highlightCourseIds = highlightIds
+                highlightCourseIds = highlightIds,
+                rowStartByCourseId = rowStartByCourseId
             )
         }
 

@@ -40,4 +40,7 @@ class DatabaseModule {
 
     @Factory
     fun provideWidgetAppSettingsDao(db: WidgetDatabase): WidgetAppSettingsDao = db.widgetAppSettingsDao()
+
+    @Factory
+    fun provideWidgetTimeSlotDao(db: WidgetDatabase): WidgetTimeSlotDao = db.widgetTimeSlotDao()
 }

@@ -7,8 +7,8 @@ import androidx.room3.RoomDatabaseConstructor
 import com.xingheyuzhuan.shiguangschedule.data.di.AppStorage
 
 @Database(
-    entities = [WidgetCourse::class, WidgetAppSettings::class],
-    version = 3,
+    entities = [WidgetCourse::class, WidgetAppSettings::class, WidgetTimeSlot::class],
+    version = 4,
     exportSchema = false
 )
 @ConstructedBy(WidgetDatabaseConstructor::class)
@@ -16,6 +16,7 @@ abstract class WidgetDatabase : RoomDatabase() {
 
     abstract fun widgetCourseDao(): WidgetCourseDao
     abstract fun widgetAppSettingsDao(): WidgetAppSettingsDao
+    abstract fun widgetTimeSlotDao(): WidgetTimeSlotDao
 
     companion object {
         fun getDatabase(appStorage: AppStorage): WidgetDatabase {

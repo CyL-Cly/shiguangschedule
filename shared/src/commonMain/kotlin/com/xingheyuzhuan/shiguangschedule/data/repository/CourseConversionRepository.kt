@@ -118,11 +118,53 @@ class CourseConversionRepository(
         return finalColor
     }
 
+    /**
+     * 将超出时间段表范围的节次收敛到合法区间。
+     *
+     * 渲染层 `mergeCourses` 按 `number` 精确匹配时间段，匹配不到会直接丢弃该课程，
+     * 且不会给出任何提示。导入阶段若放任越界节次入库，用户会看到「导入成功但课表少课」。
+     *
+     * 具体实现见 [CourseSectionClamp]，此处仅负责取边界并委托。
+     *
+     * @return 收敛后的 (start, end)；若时间段表为空则原样返回，交由渲染层兜底。
+     */
+    private suspend fun resolveSectionBounds(tableId: String): Pair<Int, Int>? {
+        val slotNumbers = timeSlotDao.getTimeSlotsByCourseTableId(tableId).first()
+            .map { it.number }
+        if (slotNumbers.isEmpty()) return null
+        return slotNumbers.min() to slotNumbers.max()
+    }
+
+    private fun clampSections(
+        start: Int?,
+        end: Int?,
+        bounds: Pair<Int, Int>?
+    ): Pair<Int?, Int?> = CourseSectionClamp.clamp(start, end, bounds)
+
+    /**
+     * 收敛节次，并在发生平移时产出一条说明。
+     *
+     * 平移后的课程会落在与教务公告不同的时间上（如 13-14 节落到 9-10 节），
+     * 用户无从察觉，因此把差异回传给调用方写入同步日志。
+     */
+    private fun clampWithNote(
+        course: ImportCourseJsonModel,
+        bounds: Pair<Int, Int>?
+    ): Pair<Pair<Int?, Int?>, String?> {
+        val original = course.startSection to course.endSection
+        val clamped = clampSections(course.startSection, course.endSection, bounds)
+        // bounds 为空时 clamp 原样返回，因此发生变化必然意味着 bounds 非空
+        if (clamped == original || bounds == null) return clamped to null
+        val note = "课程《${course.name}》周${course.day} 节次 ${original.first}-${original.second} " +
+            "超出时间段表 (${bounds.first}-${bounds.second})，已收敛为 ${clamped.first}-${clamped.second}"
+        return clamped to note
+    }
+
     @Transaction
     suspend fun importCoursesFromList(
         tableId: String,
         coursesJsonModel: List<ImportCourseJsonModel>
-    ) {
+    ): List<String> {
         coursesJsonModel.forEach { validateCustomCourseTimeOrThrow(it) }
 
         val currentStyle = styleSettingsRepository.styleFlow.first()
@@ -132,6 +174,8 @@ class CourseConversionRepository(
 
         val courseEntities = ArrayList<Course>(coursesJsonModel.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
+        val sectionBounds = resolveSectionBounds(tableId)
+        val clampNotes = mutableListOf<String>()
 
         val nameToColorMap = mutableMapOf<String, Int>()
         var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
@@ -149,6 +193,13 @@ class CourseConversionRepository(
                     next
                 }
             )
+            val (startSection, endSection) = if (jsonCourse.isCustomTime) {
+                jsonCourse.startSection to jsonCourse.endSection
+            } else {
+                val (clamped, note) = clampWithNote(jsonCourse, sectionBounds)
+                note?.let { clampNotes.add(it) }
+                clamped
+            }
 
             courseEntities.add(
                 Course(
@@ -158,8 +209,8 @@ class CourseConversionRepository(
                     teacher = jsonCourse.teacher,
                     position = jsonCourse.position,
                     day = jsonCourse.day,
-                    startSection = jsonCourse.startSection,
-                    endSection = jsonCourse.endSection,
+                    startSection = startSection,
+                    endSection = endSection,
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
@@ -177,6 +228,7 @@ class CourseConversionRepository(
 
         if (courseEntities.isNotEmpty()) courseDao.insertAll(courseEntities)
         if (courseWeekEntities.isNotEmpty()) courseWeekDao.insertAll(courseWeekEntities)
+        return clampNotes
     }
 
     /**
@@ -185,12 +237,14 @@ class CourseConversionRepository(
      * 1. 课程数据（courses）：始终清空并重新导入。
      * 2. 时间段数据（timeSlots）：仅在 JSON 包含有效数据时覆盖，否则保留本地现状。
      * 3. 配置信息（config）：仅在 JSON 包含有效数据时覆盖，且会保留本地的 showWeekends 设置。
+     *
+     * @return 节次被收敛的课程说明，供调用方写入日志；无越界时为空列表。
      */
     @Transaction
     suspend fun importCourseTableFromJson(
         tableId: String,
         courseTableJsonModel: CourseTableImportModel
-    ) {
+    ): List<String> {
         courseTableJsonModel.courses.forEach { validateCustomCourseTimeOrThrow(it) }
         courseTableJsonModel.timeSlots?.let { validateTimeSlotsOrThrow(it) }
 
@@ -202,6 +256,15 @@ class CourseConversionRepository(
 
         val courseEntities = ArrayList<Course>(courseTableJsonModel.courses.size)
         val courseWeekEntities = mutableListOf<CourseWeek>()
+
+        // 时间段可能随后被 JSON 覆盖，因此优先用 JSON 中的时间段计算边界，
+        // 否则沿用库中现有的时间段，避免用旧边界去夹取即将被替换的课表。
+        val sectionBounds = courseTableJsonModel.timeSlots
+            ?.map { it.number }
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { it.min() to it.max() }
+            ?: resolveSectionBounds(tableId)
+        val clampNotes = mutableListOf<String>()
 
         val nameToColorMap = mutableMapOf<String, Int>()
         var colorOffset = if (colorSize > 0) Random.nextInt(colorSize) else 0
@@ -219,6 +282,13 @@ class CourseConversionRepository(
                     next
                 }
             )
+            val (startSection, endSection) = if (jsonCourse.isCustomTime) {
+                jsonCourse.startSection to jsonCourse.endSection
+            } else {
+                val (clamped, note) = clampWithNote(jsonCourse, sectionBounds)
+                note?.let { clampNotes.add(it) }
+                clamped
+            }
 
             courseEntities.add(
                 Course(
@@ -228,8 +298,8 @@ class CourseConversionRepository(
                     teacher = jsonCourse.teacher,
                     position = jsonCourse.position,
                     day = jsonCourse.day,
-                    startSection = jsonCourse.startSection,
-                    endSection = jsonCourse.endSection,
+                    startSection = startSection,
+                    endSection = endSection,
                     isCustomTime = jsonCourse.isCustomTime,
                     customStartTime = jsonCourse.customStartTime,
                     customEndTime = jsonCourse.customEndTime,
@@ -281,6 +351,7 @@ class CourseConversionRepository(
             )
             appSettingsRepository.insertOrUpdateCourseConfig(updatedConfig)
         }
+        return clampNotes
     }
 
     /**
