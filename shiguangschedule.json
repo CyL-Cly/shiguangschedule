@@ -1,7 +1,7 @@
 {
-  "versionCode": 55,
-  "versionName": "2.1.24",
-  "downloadUrl": "https://a8aa4e60c8d63f44b.gz5.agentos-app.net/f/VDrSm/shiguangschedule-v2.1.24-arm64-v8a-release.apk",
+  "versionCode": 56,
+  "versionName": "2.1.25",
+  "downloadUrl": "https://a8aa4e60c8d63f44b.gz5.agentos-app.net/f/lx2S1/shiguangschedule-v2.1.25-arm64-v8a-release.apk",
   "releaseNotes": "修复教务课表导入丢课（单双周/第N周/多段节次写法兼容，越界节次自动收敛并记录日志）；周网格小组件改用节次表排布，早上课/早下课与课表对齐；修复越界节次导致的课程静默消失",
   "fileSize": 4121943
 }
