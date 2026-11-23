@@ -8,8 +8,9 @@ permissions:
 
 jobs:
   ios-device:
-    runs-on: macos-26
-    timeout-minutes: 35
+    # The Intel image has more memory; Xcode still targets iOS arm64.
+    runs-on: macos-26-intel
+    timeout-minutes: 45
     env:
       GRADLE_USE_ALIYUN_MIRRORS: 'false'
       DEVELOPER_DIR: /Applications/Xcode_26.4.app/Contents/Developer
@@ -19,9 +20,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Build unsigned iOS device app
+      - name: Link Kotlin/Native release framework
+        timeout-minutes: 30
         run: |
           chmod +x gradlew
+          gradle_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          mkdir -p "$gradle_home"
+          printf '\n%s\n' \
+            'kotlin.native.binary.enableReleaseBinaryCache=true' \
+            'kotlin.internal.native.enableReleaseBinaryCache=true' \
+            'org.gradle.workers.max=2' >> "$gradle_home/gradle.properties"
+          ./gradlew :shared:linkReleaseFrameworkIosArm64 --console=plain --stacktrace
+      - name: Build unsigned iOS device app
+        run: |
           xcodebuild -version
           xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp \
             -configuration Release -sdk iphoneos \
