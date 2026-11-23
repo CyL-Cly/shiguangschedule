@@ -5,7 +5,7 @@ package com.xingheyuzhuan.shiguangschedule.tool.update
  *
  * - 手动检查（设置页）：Checking → Available / UpToDate / Error（结果展示后 dismissCheck 复位）；
  * - 启动强制更新：checkOnStartup 静默检查，Available → downloadLatest（含重试）→
- *   ReadyToInstall；多次尝试均失败 → DownloadFailed（给退路，下次启动再检查）。
+ *   校验成功后自动安装（未授权时等待授权）；多次尝试均失败 → DownloadFailed。
  */
 sealed interface UpdateKitState {
     /** 空闲（无弹窗）。 */
@@ -35,9 +35,19 @@ sealed interface UpdateKitState {
         val maxAttempts: Int = 1,
     ) : UpdateKitState
 
-    /** 下载完成，待安装（ApkInstaller.launchInstall）。 */
-    data class ReadyToInstall(val filePath: String) : UpdateKitState
+    /** APK 已下载并校验通过，仅等待安装未知应用授权。 */
+    data class AwaitingInstallPermission(val filePath: String, val versionCode: Long) : UpdateKitState
+
+    data object Installing : UpdateKitState
+
+    data class InstallFailed(val reason: InstallFailure) : UpdateKitState
 
     /** 下载失败（含全部重试耗尽）。 */
     data object DownloadFailed : UpdateKitState
+}
+
+enum class InstallFailure {
+    Unsupported,
+    ConfirmationRequired,
+    Other,
 }

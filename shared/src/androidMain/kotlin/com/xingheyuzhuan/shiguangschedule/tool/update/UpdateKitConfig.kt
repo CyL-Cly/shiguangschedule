@@ -7,7 +7,6 @@ package com.xingheyuzhuan.shiguangschedule.tool.update
  * @param userAgent 请求 UA；默认伪装成浏览器，绕过服务端按 UA 白名单拦截的 WAF（403）
  * @param apkDownloadDir APK 下载子目录（位于应用外部缓存目录 getExternalFilesDir 下）
  * @param apkFileName 下载的 APK 文件名
- * @param fileProviderAuthority FileProvider authority；null → 默认 "${packageName}.fileprovider" 约定
  * @param connectTimeoutSec 清单请求连接超时
  * @param readTimeoutSec 清单请求读取超时
  * @param writeTimeoutSec 下载写入超时
@@ -19,7 +18,6 @@ data class UpdateKitConfig(
     val userAgent: String = DEFAULT_USER_AGENT,
     val apkDownloadDir: String = "apk",
     val apkFileName: String = "update.apk",
-    val fileProviderAuthority: String? = null,
     val connectTimeoutSec: Long = 10,
     val readTimeoutSec: Long = 15,
     val writeTimeoutSec: Long = 15,

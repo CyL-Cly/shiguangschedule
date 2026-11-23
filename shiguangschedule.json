@@ -1,7 +1,8 @@
 {
-  "versionCode": 56,
-  "versionName": "2.1.25",
-  "downloadUrl": "https://a8aa4e60c8d63f44b.gz5.agentos-app.net/f/lx2S1/shiguangschedule-v2.1.25-arm64-v8a-release.apk",
-  "releaseNotes": "修复教务课表导入丢课（单双周/第N周/多段节次写法兼容，越界节次自动收敛并记录日志）；周网格小组件改用节次表排布，早上课/早下课与课表对齐；修复越界节次导致的课程静默消失",
-  "fileSize": 4121943
+  "versionCode": 59,
+  "versionName": "2.2.1",
+  "downloadUrl": "https://pan.dagongren.tech/f/OKGCe/shiguangschedule-v2.2.1-arm64-v8a-one-tap-release.apk",
+  "releaseNotes": "修复广海阳江校外教务登录：统一身份认证后，使用单独的微服务网关票据建立会话。\n同步课表时并行获取考试日程，考试按学期保存在本机。打开「考试日程」不再自动刷新，断网也能查看上次同步结果。\n保留考试手动刷新；刷新失败不会清除已有缓存。\n简化应用内更新：点击「立即更新」后，下载并校验通过即尝试安装，不再出现第二次 App 内安装确认；系统所需的安装权限不变。",
+  "fileSize": 4139495,
+  "sha256": "e1b9bb47c3026b975cc55f9ad07ae4f94b951c470cbe05c0debd7b6966cda1de"
 }

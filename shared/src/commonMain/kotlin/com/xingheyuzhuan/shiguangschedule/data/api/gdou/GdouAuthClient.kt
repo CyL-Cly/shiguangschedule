@@ -3,7 +3,10 @@ package com.xingheyuzhuan.shiguangschedule.data.api.gdou
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpHeaders
+import io.ktor.http.URLProtocol
 import io.ktor.http.Url
+import io.ktor.http.encodeURLParameter
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -13,20 +16,58 @@ import org.koin.core.annotation.Single
 class GdouAuthClient(
     private val http: GdouHttpClient
 ) {
-    var pendingReauth: GdouReauthParams? = null
-        private set
+    private data class PendingReauth(val params: GdouReauthParams, val route: GdouRoute)
 
-    /** 连接类异常映射为中文消息，其余保留原文兜底；日志/消息严禁直接输出英文异常串。 */
-    private fun toNetworkResult(error: Throwable): GdouAuthResult =
-        GdouHttpClient.connectivityText(error)
+    private var pendingReauth: PendingReauth? = null
+
+    private fun toNetworkResult(error: Throwable): GdouAuthResult {
+        if (error is CancellationException) throw error
+        return GdouHttpClient.connectivityText(error)
             ?.let { GdouAuthResult.Network("网络连接失败：$it") }
-            ?: GdouAuthResult.Network(error.message ?: "网络错误")
+            ?: GdouAuthResult.Network("教务网关请求失败")
+    }
 
-    suspend fun isJwSessionAlive(): Boolean = warmUp()
+    suspend fun isJwSessionAlive(): Boolean {
+        if (warmUp(GdouRoute.Gateway)) return true
+        return reuseDirectSession()
+    }
 
-    suspend fun registerFingerprint(fingerprint: String, referer: String? = null) {
-        val effectiveReferer = referer ?: GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE)
-        http.get("$GDOU_JW_BASE/authserver/bfp/info", effectiveReferer) {
+    private suspend fun reuseDirectSession(): Boolean =
+        http.cookieStore.get(Url(GDOU_JW_MENU)).any { it.name == "JSESSIONID" } &&
+            warmUp(GdouRoute.DirectJw)
+
+    /** 仅对读取教务数据的操作回退一次，不重发账号密码。 */
+    internal suspend fun <T> readJw(read: suspend () -> T): T {
+        val initialRoute = http.jwRoute
+        try {
+            return read()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (gatewayError: Exception) {
+            if (initialRoute != GdouRoute.Gateway || !recoverDirectSession()) throw gatewayError
+            return read()
+        }
+    }
+
+    private suspend fun recoverDirectSession(): Boolean = try {
+        reuseDirectSession() || (
+            http.cookieStore.get(Url(loginUrl())).any { it.name == "CASTGC" } &&
+                freshDirectSession()
+            )
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        false
+    }
+
+    private suspend fun freshDirectSession(): Boolean {
+        val refreshed = http.followRedirects(loginUrl(GdouRoute.DirectJw), route = GdouRoute.Auth)
+        val ticket = refreshed.serviceTicket(GdouRoute.DirectJw) ?: return false
+        return exchangeTicket(ticket, GdouRoute.DirectJw)
+    }
+
+    private suspend fun registerFingerprint(fingerprint: String, referer: String) {
+        http.get("$GDOU_AUTH_BASE/bfp/info", referer, GdouRoute.Auth) {
             parameter("bfp", fingerprint)
             parameter("_", fingerprint.take(12))
             header("X-Requested-With", "XMLHttpRequest")
@@ -42,28 +83,22 @@ class GdouAuthClient(
         fetchCaptchaIfNeeded: Boolean = true
     ): GdouAuthResult {
         return runCatching {
-            // 登录入口 = 网关嵌入形态的 jw 根；outbound 后即 https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn，
-            // 未登录时 URL 不变、body 就是 CAS 登录页（就地含 salt/execution/lt）。
-            val entry = GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE)
-            var page = http.get(GDOU_JW_BASE)
-            var salt = GdouHtml.attrValue(page.body, "pwdEncryptSalt")
-            var execution = GdouHtml.attrValue(page.body, "execution")
-            var lt = GdouHtml.attrValue(page.body, "lt")
-            if (salt.isBlank() || execution.isBlank()) {
-                dropSessionCookies()
-                page = http.get(GDOU_JW_BASE)
-                salt = GdouHtml.attrValue(page.body, "pwdEncryptSalt")
-                execution = GdouHtml.attrValue(page.body, "execution")
-                lt = GdouHtml.attrValue(page.body, "lt")
+            pendingReauth = null
+            if (captcha.isBlank()) http.cookieStore.removeMatching { it.domain == GDOU_AUTH_HOST }
+            val page = http.followRedirects(loginUrl(), route = GdouRoute.Auth)
+            page.serviceTicket(GdouRoute.DirectJw)?.let { return establishJwSession(it) }
+            if (page.status == 429 || GdouHtml.isReauth(page.url, page.body)) return classifyAuth(page)
+
+            val salt = GdouHtml.attrValue(page.body, "pwdEncryptSalt")
+            val execution = GdouHtml.attrValue(page.body, "execution")
+            if (page.status != 200 || salt.isBlank() || execution.isBlank()) {
+                return GdouAuthResult.Failed("未取得统一认证表单（HTTP ${page.status}）")
             }
-            if (salt.isBlank() || execution.isBlank()) {
-                return GdouAuthResult.Failed("登录页缺少 salt/execution")
-            }
-            if (fetchCaptchaIfNeeded && captcha.isBlank() && needCaptcha(username)) {
-                val image = fetchCaptchaImage()
+            if (fetchCaptchaIfNeeded && captcha.isBlank() && needCaptcha(username, page.url)) {
+                val image = fetchCaptchaImage(page.url)
                 return GdouAuthResult.NeedCaptcha(image)
             }
-            registerFingerprint(fingerprint, entry)
+            registerFingerprint(fingerprint, page.url)
             val payload = mapOf(
                 "username" to username,
                 "password" to GdouPasswordEncryptor.encrypt(password, salt),
@@ -71,53 +106,51 @@ class GdouAuthClient(
                 "_eventId" to "submit",
                 "cllt" to "userNameLogin",
                 "dllt" to "generalLogin",
-                "lt" to lt,
+                "lt" to GdouHtml.attrValue(page.body, "lt"),
                 "execution" to execution
             )
-            // 登录 POST 走网关根（非嵌套路径），与 wfw_login.py 实证一致。
             val first = http.postForm(
-                url = GDOU_WFW_PROXY_AUTH_LOGIN + "service=" + encodeService(GDOU_SERVICE_URL),
+                url = loginUrl(),
                 fields = payload,
-                referer = entry,
-                origin = GDOU_WFW_ORIGIN
+                referer = page.url,
+                origin = GdouRoute.Auth.origin,
+                route = GdouRoute.Auth
             )
-            val landed = if (first.status in 301..308 && !first.location.isNullOrBlank()) {
-                http.followRedirects(first.location, entry)
-            } else {
-                first
-            }
-            classifyLanding(landed)
+            classifyAuth(http.followRedirects(first, route = GdouRoute.Auth))
         }.getOrElse { toNetworkResult(it) }
     }
 
     suspend fun sendMfaCode(channel: GdouMfaChannel): GdouAuthResult {
-        val params = pendingReauth ?: return GdouAuthResult.Failed("没有待处理的二次认证会话")
+        val pending = pendingReauth ?: return GdouAuthResult.Failed("没有待处理的二次认证会话")
+        val params = pending.params
         return runCatching {
-            val svc = params.service.ifBlank { GDOU_SERVICE_URL }
-            val referer = params.referer.ifBlank { "$GDOU_WFW_ORIGIN/authserver/reAuthCheck/reAuthLoginView.do" }
+            val svc = casService(pending.route)
+            val referer = params.referer.ifBlank { "$GDOU_AUTH_BASE/reAuthCheck/reAuthLoginView.do" }
             if (channel.reAuthType != params.reAuthType) {
                 http.postForm(
-                    url = "$GDOU_WFW_ORIGIN/authserver/reAuthCheck/changeReAuthType.do",
+                    url = "$GDOU_AUTH_BASE/reAuthCheck/changeReAuthType.do",
                     fields = mapOf(
                         "isMultifactor" to params.isMultifactor,
                         "reAuthType" to channel.reAuthType,
                         "service" to svc
                     ),
                     referer = referer,
-                    origin = GDOU_WFW_ORIGIN,
+                    origin = GdouRoute.Auth.origin,
+                    route = GdouRoute.Auth,
                     ajax = true
                 )
-                pendingReauth = params.copy(reAuthType = channel.reAuthType)
+                pendingReauth = pending.copy(params = params.copy(reAuthType = channel.reAuthType))
             }
-            val current = pendingReauth ?: params
+            val current = pendingReauth?.params ?: params
             val sent = http.postForm(
-                url = "$GDOU_WFW_ORIGIN/authserver/dynamicCode/getDynamicCodeByReauth.do",
+                url = "$GDOU_AUTH_BASE/dynamicCode/getDynamicCodeByReauth.do",
                 fields = mapOf(
                     "userName" to current.reAuthUserId,
                     "authCodeTypeName" to channel.authCodeTypeName
                 ),
                 referer = referer,
-                origin = GDOU_WFW_ORIGIN,
+                origin = GdouRoute.Auth.origin,
+                route = GdouRoute.Auth,
                 ajax = true
             )
             val obj = runCatching { http.parseJson(sent.body).jsonObject }.getOrNull()
@@ -137,12 +170,13 @@ class GdouAuthClient(
     }
 
     suspend fun submitMfaCode(code: String): GdouAuthResult {
-        val params = pendingReauth ?: return GdouAuthResult.Failed("没有待处理的二次认证会话")
+        val pending = pendingReauth ?: return GdouAuthResult.Failed("没有待处理的二次认证会话")
+        val params = pending.params
         return runCatching {
-            val svc = params.service.ifBlank { GDOU_SERVICE_URL }
-            val referer = params.referer.ifBlank { "$GDOU_WFW_ORIGIN/authserver/reAuthCheck/reAuthLoginView.do" }
+            val svc = casService(pending.route)
+            val referer = params.referer.ifBlank { "$GDOU_AUTH_BASE/reAuthCheck/reAuthLoginView.do" }
             val result = http.postForm(
-                url = "$GDOU_WFW_ORIGIN/authserver/reAuthCheck/reAuthSubmit.do",
+                url = "$GDOU_AUTH_BASE/reAuthCheck/reAuthSubmit.do",
                 fields = mapOf(
                     "service" to svc,
                     "reAuthType" to params.reAuthType,
@@ -156,7 +190,8 @@ class GdouAuthClient(
                     "skipTmpReAuth" to "true"
                 ),
                 referer = referer,
-                origin = GDOU_WFW_ORIGIN,
+                origin = GdouRoute.Auth.origin,
+                route = GdouRoute.Auth,
                 ajax = true
             )
             val obj = runCatching { http.parseJson(result.body).jsonObject }.getOrNull()
@@ -164,26 +199,64 @@ class GdouAuthClient(
             if (status in setOf("reAuth_failed", "reAuth_unauthorized")) {
                 return GdouAuthResult.Failed(obj?.get("msg")?.jsonPrimitive?.contentOrNull ?: status)
             }
-            val sso = http.followRedirects(loginUrl(svc))
-            classifyLanding(sso)
+            classifyAuth(http.followRedirects(loginUrl(pending.route), route = GdouRoute.Auth), pending.route)
         }.getOrElse { toNetworkResult(it) }
     }
 
-    private suspend fun dropSessionCookies() {
-        http.cookieStore.removeByName("CASTGC")
-        http.cookieStore.removeMatching { cookie ->
-            cookie.name.equals("JSESSIONID", ignoreCase = true) &&
-                GdouHtml.isJwHost(cookie.domain.orEmpty())
-        }
-        http.cookieStore.removeMatching { cookie ->
-            cookie.domain.orEmpty().trimStart('.') == GDOU_WFW_HOST &&
-                cookie.name in setOf("WFWSESSID", "urlss")
+    private fun GdouHttpExchange.serviceTicket(route: GdouRoute): String? {
+        val target = location?.let { runCatching { Url(it) }.getOrNull() } ?: return null
+        val service = Url(casService(route))
+        return location.takeIf {
+            isRedirect && target.protocol == URLProtocol.HTTPS && target.port == 443 && target.user == null &&
+                target.host == service.host && target.encodedPath.ifEmpty { "/" } == service.encodedPath.ifEmpty { "/" } &&
+                !target.parameters["ticket"].isNullOrBlank()
         }
     }
 
-    private suspend fun needCaptcha(username: String): Boolean {
-        val resp = http.get("$GDOU_JW_BASE/authserver/checkNeedCaptcha.htl", GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE)) {
+    private suspend fun establishJwSession(directTicket: String): GdouAuthResult {
+        pendingReauth = null
+        // 和 WFW 门户的「一键登录」一致：先启动网关会话，再用已有 CAS 登录申请 WFW 自己的票据。
+        val gatewayCas = try {
+            http.followRedirects(GDOU_WFW_HOME, route = GdouRoute.Gateway)
+            http.followRedirects(loginUrl(GdouRoute.Gateway), route = GdouRoute.Auth)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        if (gatewayCas != null) {
+            val gatewayTicket = gatewayCas.serviceTicket(GdouRoute.Gateway)
+            if (gatewayTicket != null && exchangeTicket(gatewayTicket, GdouRoute.Gateway)) {
+                return GdouAuthResult.LoggedIn
+            }
+            if (GdouHtml.isReauth(gatewayCas.url, gatewayCas.body)) {
+                val mfa = rememberReauth(gatewayCas, GdouRoute.Gateway)
+                if (mfa is GdouAuthResult.NeedMfa) return mfa
+            }
+        }
+        // JW 票据从未发送给 WFW。只在校园网回退时用它一次。
+        return if (exchangeTicket(directTicket, GdouRoute.DirectJw)) GdouAuthResult.LoggedIn
+        else gatewayLoginFailed()
+    }
+
+    private fun gatewayLoginFailed() =
+        GdouAuthResult.Failed("统一认证已通过，wfw 与校园网直连均未建立教务会话")
+
+    private suspend fun exchangeTicket(ticket: String, route: GdouRoute): Boolean = try {
+        val landing = http.followRedirects(ticket, route = route)
+        // WFW 门户返回的是网关主页；是否有教务授权以实际菜单为准，不以门户 HTML 或 Cookie 名判断。
+        landing.status == 200 && (route == GdouRoute.Gateway || !GdouHtml.looksLikeLoginPage(landing.url, landing.body)) &&
+            warmUp(route)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        false
+    }
+
+    private suspend fun needCaptcha(username: String, referer: String): Boolean {
+        val resp = http.get("$GDOU_AUTH_BASE/checkNeedCaptcha.htl", referer, GdouRoute.Auth) {
             parameter("username", username)
+            header("X-Requested-With", "XMLHttpRequest")
             header(HttpHeaders.Accept, "application/json, text/plain, */*")
         }
         val obj = runCatching { http.parseJson(resp.body).jsonObject }.getOrNull() ?: return false
@@ -191,92 +264,59 @@ class GdouAuthClient(
         return need.contentOrNull.equals("true", ignoreCase = true) || need.contentOrNull == "1"
     }
 
-    private suspend fun fetchCaptchaImage(): ByteArray {
+    private suspend fun fetchCaptchaImage(referer: String): ByteArray {
         val ts = GdouPasswordEncryptor.randomString(8)
-        val resp = http.getBytes("$GDOU_JW_BASE/authserver/getCaptcha.htl?ts=$ts", GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_BASE))
+        val resp = http.getBytes("$GDOU_AUTH_BASE/getCaptcha.htl?ts=$ts", referer, GdouRoute.Auth)
         return resp.bytes ?: ByteArray(0)
     }
 
-    private suspend fun classifyLanding(resp: GdouHttpExchange): GdouAuthResult {
-        val current = leaveSso(resp)
-        val url = current.location ?: current.url
-        // a. 二次认证页
-        if (GdouHtml.isReauth(url, current.body) || GdouHtml.isReauth(current.url, current.body)) {
-            val parsed = GdouHtml.parseReauthParams(current.body)
-            if (parsed.reAuthUserId.isBlank()) {
-                return GdouAuthResult.Failed("二次认证页解析失败")
-            }
-            pendingReauth = parsed.copy(referer = GdouHtml.forceHttps(url))
-            return GdouAuthResult.NeedMfa(GdouMfaChannel.fromReAuthType(parsed.reAuthType))
-        }
-        // b. 已进入教务页面（网关嵌入 URL 且带会话标记），warmUp 二次确认
-        if (GdouHtml.isJwLoggedIn(current.url, current.body) && warmUp()) {
+    private suspend fun classifyAuth(
+        current: GdouHttpExchange,
+        route: GdouRoute = GdouRoute.DirectJw
+    ): GdouAuthResult {
+        current.serviceTicket(route)?.let { ticket ->
+            if (route == GdouRoute.DirectJw) return establishJwSession(ticket)
             pendingReauth = null
-            return GdouAuthResult.LoggedIn
+            return if (exchangeTicket(ticket, GdouRoute.Gateway) || recoverDirectSession()) GdouAuthResult.LoggedIn
+            else gatewayLoginFailed()
         }
-        // c. 落地为 wfw 门户（非网关嵌入路径）且已建立 wfw 会话
-        if (GdouHtml.hostOf(url) == GDOU_WFW_HOST && !GdouHtml.isGatewayJwUrl(url) &&
-            http.cookieStore.get(Url(GDOU_WFW_HOME)).any { it.name.equals("WFWSESSID", ignoreCase = true) }
-        ) {
-            return if (warmUp()) {
-                pendingReauth = null
-                GdouAuthResult.LoggedIn
-            } else {
-                GdouAuthResult.Failed("统一认证已通过，但教务网关会话未建立")
-            }
+        if (current.status == 429) {
+            return GdouAuthResult.Failed("登录请求过于频繁，请稍后再试")
         }
-        // d. CAS 登录页 / 错误页
+        if (GdouHtml.isReauth(current.url, current.body)) return rememberReauth(current, route)
         val pageError = GdouHtml.pageError(current.body)
-        if (pageError.isNotBlank() ||
-            current.body.contains("pwdEncryptSalt") ||
-            current.url.contains("/authserver/login")
-        ) {
-            return GdouAuthResult.BadPassword(pageError.ifBlank { "账号或密码错误" })
+        if (pageError.isNotBlank()) return GdouAuthResult.BadPassword(pageError)
+        val isCasLogin = GdouHtml.pathOf(current.url) == "/authserver/login"
+        if (current.body.contains("pwdEncryptSalt") || (isCasLogin && current.status == 200)) {
+            return GdouAuthResult.Failed("统一认证返回登录页，未建立教务会话")
         }
-        // e. 其余
-        if (GdouHtml.isSsoPath(current.url) || GdouHtml.isSsoPath(url)) {
-            return GdouAuthResult.Failed("未完成教务 SSO（停在 ${GdouHtml.pathOf(current.url)}，HTTP ${current.status}）")
-        }
-        return GdouAuthResult.Failed("未进入教务（HTTP ${current.status}）")
+        return GdouAuthResult.Failed("统一认证未签发教务票据（HTTP ${current.status}）")
     }
 
-    /**
-     * 仅当停在 sso 路径（含网关嵌入形态）且存在 30x/页面 meta 跳转时继续跟随；
-     * outboundUrl 会保持网关路径。严禁再访问官方 jw 菜单（统一走网关，禁止直连官方域）。
-     */
-    private suspend fun leaveSso(resp: GdouHttpExchange): GdouHttpExchange {
-        var current = resp
-        if (GdouHtml.isSsoPath(current.url)) {
-            val next = current.location ?: GdouHtml.htmlRedirect(current.body)
-            if (!next.isNullOrBlank()) {
-                current = http.followRedirects(GdouHtml.resolveUrl(current.url, next), current.url)
-            }
-        }
-        return current
+    private fun rememberReauth(current: GdouHttpExchange, route: GdouRoute): GdouAuthResult {
+        val parsed = GdouHtml.parseReauthParams(current.body)
+        if (parsed.reAuthUserId.isBlank()) return GdouAuthResult.Failed("二次认证页解析失败")
+        pendingReauth = PendingReauth(parsed.copy(referer = current.url), route)
+        return GdouAuthResult.NeedMfa(GdouMfaChannel.fromReAuthType(parsed.reAuthType))
     }
 
-    /** 网关会话探测：未登录时网关就地返回 CAS 登录页，isJwLoggedIn=false，无副作用。 */
-    private suspend fun warmUp(): Boolean {
-        return runCatching {
-            val resp = http.followRedirects(GdouHtml.rewriteOfficialJwToGateway(GDOU_JW_MENU))
-            resp.status == 200 && GdouHtml.isJwLoggedIn(resp.url, resp.body)
-        }.getOrDefault(false)
+    private suspend fun warmUp(route: GdouRoute): Boolean = try {
+        val resp = http.followRedirects(GDOU_JW_MENU, route = route)
+        val valid = resp.status == 200 && GdouHtml.isJwLoggedIn(resp.url, resp.body)
+        if (valid) http.jwRoute = route
+        valid
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        false
     }
 
-    private fun encodeService(service: String): String {
-        val encoded = buildString {
-            service.forEach { ch ->
-                when (ch) {
-                    ':' -> append("%3A")
-                    '/' -> append("%2F")
-                    else -> append(ch)
-                }
-            }
-        }
-        return encoded
+    private fun casService(route: GdouRoute): String = when (route) {
+        GdouRoute.Gateway -> GDOU_WFW_HOME
+        GdouRoute.DirectJw -> GDOU_SERVICE_URL
+        GdouRoute.Auth -> error("CAS 票据必须指定教务服务")
     }
 
-    /** CAS 登录 URL 直接构造在 wfw 网关根上，全程不向 authserver 官方域发请求。 */
-    private fun loginUrl(service: String = GDOU_SERVICE_URL): String =
-        GDOU_WFW_PROXY_AUTH_LOGIN + "service=" + encodeService(service)
+    private fun loginUrl(route: GdouRoute = GdouRoute.DirectJw): String =
+        "$GDOU_AUTH_BASE/login?service=${casService(route).encodeURLParameter()}"
 }

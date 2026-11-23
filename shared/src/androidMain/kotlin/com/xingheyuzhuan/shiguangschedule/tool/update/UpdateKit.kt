@@ -1,6 +1,10 @@
 package com.xingheyuzhuan.shiguangschedule.tool.update
 
 import android.content.Context
+import android.os.Build
+import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,11 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    - 手动检查：`kit.checkUpdate()` → `Available` / `UpToDate` / `Error`；
  *    - 启动静默检查：`kit.checkOnStartup()`（进程内只查一次，无更新/失败静默回 Idle）；
  *    - 下载：`kit.download(manifest)` 或 `kit.downloadLatest()`（复用检查结果，自动按
- *      [UpdateKitConfig.downloadMaxRetries] 重试）→ `ReadyToInstall` / `DownloadFailed`；
- *    - 安装：`ApkInstaller.canRequestInstall` → `launchInstall`（未授权先
- *      `intentToUnknownAppSources` 引导授权），完成后 `resetDownload()` 复位。
- * 4. 接入要求：manifest 注册 FileProvider（authority 默认 "${packageName}.fileprovider"），
- *    paths 覆盖 external-files-path 下 APK 下载目录。
+ *      [UpdateKitConfig.downloadMaxRetries] 重试），校验通过后自动安装；
+ *    - `AwaitingInstallPermission` 表示需引导授权，返回后调用 `requestInstall()` 继续。
+ * 4. manifest 需声明安装权限与 [UpdateInstallReceiver]。
  *
  * ## 状态互斥
  * 实例自带状态机，多入口（如设置页手动检查 + 启动强制更新）请各自持有实例以免状态串扰；
@@ -79,7 +81,10 @@ class UpdateKit(
      * 结果态展示后调 [dismissCheck] 复位。Checking 中重复调用被忽略。
      */
     fun checkUpdate() {
-        if (_state.value is UpdateKitState.Checking) return
+        when (_state.value) {
+            UpdateKitState.Checking, UpdateKitState.Installing, is UpdateKitState.Downloading -> return
+            else -> Unit
+        }
         checkJob?.cancel()
         _state.value = UpdateKitState.Checking
         checkJob = scope.launch {
@@ -102,7 +107,7 @@ class UpdateKit(
     fun checkOnStartup() {
         if (startupChecked) return
         startupChecked = true
-        if (_state.value is UpdateKitState.Checking) return
+        if (_state.value != UpdateKitState.Idle) return
         _state.value = UpdateKitState.Checking
         checkJob = scope.launch {
             _state.value = when (val decision = evaluate()) {
@@ -118,19 +123,22 @@ class UpdateKit(
 
     /** 关闭检查结果对话框（Available/UpToDate/Error → Idle；Checking 不复位）。 */
     fun dismissCheck() {
-        if (_state.value !is UpdateKitState.Checking) _state.value = UpdateKitState.Idle
+        when (_state.value) {
+            UpdateKitState.Checking, UpdateKitState.Installing -> Unit
+            else -> _state.value = UpdateKitState.Idle
+        }
     }
 
     // ---- 下载 / 安装 ----
 
     /**
-     * 下载指定清单的 APK：Downloading → ReadyToInstall / DownloadFailed。
+     * 下载指定清单的 APK：校验成功后自动安装，缺少授权时等待用户授权。
      *
      * @param maxRetries 失败自动重试次数（0 = 不重试，共 1 次尝试）；
      *   重试语义同 [ApkDownloader.downloadWithRetry]，进度与重试次数由 [UpdateKitState.Downloading] 呈现。
      */
     fun download(manifest: UpdateManifest, maxRetries: Int = 0) {
-        if (_state.value is UpdateKitState.Downloading) return
+        if (_state.value is UpdateKitState.Downloading || _state.value == UpdateKitState.Installing) return
         if (!manifest.isValid()) {
             _state.value = UpdateKitState.DownloadFailed
             return
@@ -144,17 +152,50 @@ class UpdateKit(
      * @return 是否成功启动下载（无可用清单时 false，如 DownloadFailed 后重试）。
      */
     fun downloadLatest(): Boolean {
+        if (_state.value == UpdateKitState.Installing) return false
         if (_state.value is UpdateKitState.Downloading) return true
         val manifest = lastManifest ?: return false
         startDownloadJob(manifest, config.downloadMaxRetries)
         return true
     }
 
+    /** 从系统授权页返回后继续安装，返回 false 表示尚未授权。 */
+    fun requestInstall(): Boolean {
+        val pending = _state.value as? UpdateKitState.AwaitingInstallPermission ?: return true
+        return installOrRequestPermission(pending)
+    }
+
+    private fun installOrRequestPermission(pending: UpdateKitState.AwaitingInstallPermission): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            _state.value = UpdateKitState.InstallFailed(InstallFailure.Unsupported)
+            return true
+        }
+        if (!ApkInstaller.canRequestInstall(appContext)) {
+            _state.value = pending
+            return false
+        }
+
+        _state.value = UpdateKitState.Installing
+        scope.launch {
+            val failure = try {
+                ApkInstaller.install(appContext, File(pending.filePath), pending.versionCode)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w("UpdateKit", "Could not install update", error)
+                InstallFailure.Other
+            }
+            _state.value = if (failure == null) UpdateKitState.Idle else UpdateKitState.InstallFailed(failure)
+        }
+        return true
+    }
+
     /**
      * 复位下载状态：Downloading 中调用会取消下载并清理半成品；
-     * ReadyToInstall / DownloadFailed → Idle。
+     * AwaitingInstallPermission / DownloadFailed → Idle。
      */
     fun resetDownload() {
+        if (_state.value == UpdateKitState.Installing) return
         downloadCancelled.set(true)
         downloadJob?.cancel()
         downloadJob = null
@@ -195,9 +236,13 @@ class UpdateKit(
                 expectedFileSize = manifest.fileSize,
             )
             if (downloadCancelled.get()) return@launch
-            _state.value = result.fold(
-                onSuccess = { UpdateKitState.ReadyToInstall(it.absolutePath) },
-                onFailure = { UpdateKitState.DownloadFailed },
+            result.fold(
+                onSuccess = { file ->
+                    installOrRequestPermission(
+                        UpdateKitState.AwaitingInstallPermission(file.absolutePath, manifest.versionCode)
+                    )
+                },
+                onFailure = { _state.value = UpdateKitState.DownloadFailed },
             )
         }
     }
@@ -212,6 +257,6 @@ class UpdateKit(
     )
 
     private fun localVersionCode(): Long = runCatching {
-        appContext.packageManager.getPackageInfo(appContext.packageName, 0).longVersionCode
+        PackageInfoCompat.getLongVersionCode(appContext.packageManager.getPackageInfo(appContext.packageName, 0))
     }.getOrDefault(0L)
 }

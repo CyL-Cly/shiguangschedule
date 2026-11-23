@@ -73,7 +73,7 @@ class GdouHtmlTest {
     fun rewriteOfficialJwToGateway_keepsPathAndQuery() {
         assertEquals(
             "$GDOU_WFW_ORIGIN/https://jw.gdou.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default",
-            GdouHtml.rewriteOfficialJwToGateway(GDOU_KB_INDEX)
+            GdouHtml.rewriteOfficialJwToGateway("$GDOU_JW_BASE/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default")
         )
         assertEquals(
             "$GDOU_WFW_ORIGIN/https://jw.gdou.edu.cn",

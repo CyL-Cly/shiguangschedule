@@ -36,6 +36,15 @@
     <string name="title_vacation_until_start">Vacation (%1$s days left)</string>
     <string name="title_semester_not_set">Please set semester start date</string>
     <string name="date_format_year_month_day">%2$s/%3$s/%1$s</string>
+    <string name="title_exam_schedule">Exam schedule</string>
+    <string name="text_exam_loading">Loading exam schedule...</string>
+    <string name="text_exam_not_synced">Exams for this term have not been synced. Sync your timetable or tap Refresh.</string>
+    <string name="text_no_exams">No exam schedule found for this term</string>
+    <string name="text_exam_load_failed">Could not load exam schedule</string>
+    <string name="text_exam_login_required">Your academic session has expired. Please sign in again.</string>
+    <string name="action_exam_login">Academic sign-in</string>
+    <string name="exam_name_prefix">Exam: %1$s</string>
+    <string name="exam_seat_prefix">Seat: %1$s</string>
 
     <!-- Add Course -->
     <string name="toast_save_success">Saved successfully</string>
@@ -353,11 +362,12 @@
     <string name="dialog_downloading_update">Downloading update</string>
     <string name="dialog_download_failed">Download failed</string>
     <string name="dialog_download_failed_msg">All attempts failed. Check your network and try again.</string>
-    <string name="dialog_apk_ready">Update downloaded</string>
-    <string name="dialog_apk_ready_msg">The update package is ready. Install now?</string>
+    <string name="update_auto_install_notice">Installation will start automatically after the download is verified.</string>
     <string name="dialog_need_unknown_sources">Unknown-app install permission required</string>
     <string name="dialog_need_unknown_sources_msg">Allow this app to install unknown apps in system settings. Installation will continue when you return.</string>
-    <string name="toast_install_failed">Could not open the installer. Please install the APK manually.</string>
+    <string name="toast_install_failed">Could not install the update. Please retry or install it manually.</string>
+    <string name="toast_install_confirmation_required">Android requires confirmation, so the in-app update was stopped. You can install the new version manually.</string>
+    <string name="toast_install_unsupported">This version of Android does not support updates without confirmation. Please install the new version manually.</string>
     <string name="update_downloaded_bytes">Downloaded %1$s</string>
     <string name="update_downloaded_bytes_of">Downloaded %1$s / %2$s</string>
     <string name="update_fallback_notes">A new version is available. Please update to continue.</string>

@@ -1,60 +1,91 @@
 package com.xingheyuzhuan.shiguangschedule.tool.update
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
-import androidx.core.content.FileProvider
+import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.core.content.pm.PackageInfoCompat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * APK 安装辅助：未知来源权限检查 / 跳系统设置 / 拉起系统安装界面。无状态。
- *
- * 接入要求：产品需在 manifest 注册 FileProvider（authority 默认 "${packageName}.fileprovider"，
- * 可通过 [UpdateKitConfig.fileProviderAuthority] 覆盖），paths 覆盖 external-files-path 下的下载目录。
- */
 object ApkInstaller {
+    private const val TAG = "ApkInstaller"
+    private const val STATUS_TIMEOUT_MS = 120_000L
+    private val results = ConcurrentHashMap<Int, CompletableDeferred<InstallFailure?>>()
 
-    /**
-     * 是否已授权安装未知应用。
-     *
-     * 签名兼容：compileSdk 37 中 [PackageManager.canRequestPackageInstalls] 已改为无参版本，
-     * 而 API 26-36 运行时是带包名参数版本——直接调用会在低版本设备抛 NoSuchMethodError，
-     * 故用反射按签名探测（无参 → 带参），两种都不可用时保守返回 true（放行尝试安装）。
-     */
-    fun canRequestInstall(context: Context): Boolean {
-        val pm = context.packageManager
-        return runCatching {
-            PackageManager::class.java.getMethod("canRequestPackageInstalls").invoke(pm) as Boolean
-        }.getOrElse {
-            runCatching {
-                PackageManager::class.java.getMethod("canRequestPackageInstalls", String::class.java)
-                    .invoke(pm, context.packageName) as Boolean
-            }.getOrDefault(true)
-        }
-    }
+    fun canRequestInstall(context: Context): Boolean = context.packageManager.canRequestPackageInstalls()
 
-    /** 跳系统「安装未知应用」设置页。 */
+    /** 跳转到系统「安装未知应用」设置。 */
     fun intentToUnknownAppSources(context: Context): Intent = Intent(
         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
         Uri.parse("package:${context.packageName}"),
     )
 
-    /**
-     * 用 FileProvider 暴露文件并拉起系统安装界面。
-     * @param authority FileProvider authority；null → 默认 "${packageName}.fileprovider" 约定
-     * @return 是否成功启动安装 intent（失败多为无默认安装器/被禁用）。
-     */
-    fun launchInstall(context: Context, file: File, authority: String? = null): Boolean {
-        return runCatching {
-            val uri = FileProvider.getUriForFile(
-                context, authority ?: "${context.packageName}.fileprovider", file,
-            )
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        }.isSuccess
+    /** 返回 null 表示安装成功。系统要求确认时由接收器取消会话。 */
+    @RequiresApi(Build.VERSION_CODES.S)
+    internal suspend fun install(
+        context: Context,
+        file: File,
+        expectedVersionCode: Long,
+    ): InstallFailure? = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val archive = pm.getPackageArchiveInfo(file.absolutePath, 0)
+        val installed = pm.getPackageInfo(context.packageName, 0)
+        require(
+            archive != null && archive.packageName == context.packageName &&
+                PackageInfoCompat.getLongVersionCode(archive) == expectedVersionCode &&
+                expectedVersionCode > PackageInfoCompat.getLongVersionCode(installed),
+        ) { "APK must be a newer version of this app matching the update manifest" }
+
+        val installer = pm.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setAppPackageName(context.packageName)
+            setSize(file.length())
+            setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
+        val result = CompletableDeferred<InstallFailure?>()
+        val sessionId = installer.createSession(params)
+        var callback: PendingIntent? = null
+        results[sessionId] = result
+        try {
+            val statusIntent = Intent(context, UpdateInstallReceiver::class.java)
+                .setAction(UpdateInstallReceiver.ACTION_INSTALL_STATUS)
+            // PackageInstaller supplies the session ID and status as fill-in extras.
+            callback = PendingIntent.getBroadcast(context, sessionId, statusIntent, PendingIntent.FLAG_MUTABLE)
+            installer.openSession(sessionId).use { session ->
+                session.openWrite("base.apk", 0, file.length()).use { output ->
+                    file.inputStream().use { input -> input.copyTo(output) }
+                    session.fsync(output)
+                }
+                session.commit(callback.intentSender)
+            }
+            withTimeout(STATUS_TIMEOUT_MS) { result.await() }
+        } catch (_: TimeoutCancellationException) {
+            Log.w(TAG, "No result for update session $sessionId")
+            InstallFailure.Other
+        } finally {
+            if (!result.isCompleted) abandonSession(context, sessionId)
+            results.remove(sessionId)
+            callback?.cancel()
+        }
+    }
+
+    internal fun finishSession(sessionId: Int, failure: InstallFailure?) {
+        results[sessionId]?.complete(failure)
+    }
+
+    internal fun abandonSession(context: Context, sessionId: Int) {
+        runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
+            .onFailure { Log.w(TAG, "Could not abandon update session $sessionId", it) }
     }
 }

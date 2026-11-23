@@ -7,12 +7,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouAccountSnapshot
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouCachedExams
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouCookie
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExam
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExamCacheState
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExamKey
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouCredentials
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouHttpClient
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouMfaChannel
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouSyncLogEntry
 import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouTerm
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.examKey
 import com.xingheyuzhuan.shiguangschedule.data.model.CourseImportExport
 import com.xingheyuzhuan.shiguangschedule.tool.SecureCrypto
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +34,7 @@ class GdouJwxtRepository(
     private val http: GdouHttpClient
 ) {
     private companion object {
+        const val MAX_CACHED_EXAM_TERMS = 6
         const val LEGACY_MIRROR_HOST = "it-eng.cloudbility.com.cn"
     }
 
@@ -47,23 +53,45 @@ class GdouJwxtRepository(
         val LAST_SYNC_AT = longPreferencesKey("${PREFIX}last_sync_at")
         val LAST_SYNC_MSG = stringPreferencesKey("${PREFIX}last_sync_msg")
         val LAST_SYNC_OK = booleanPreferencesKey("${PREFIX}last_sync_ok")
+        val EXAM_CACHE = stringPreferencesKey("${PREFIX}exam_cache")
         val SYNC_LOG = stringPreferencesKey("${PREFIX}sync_log")
     }
 
-    val snapshotFlow: Flow<GdouAccountSnapshot> = dataStore.data.map { prefs ->
+    val snapshotFlow: Flow<GdouAccountSnapshot> = dataStore.data.map { it.toSnapshot() }
+
+    private fun Preferences.toSnapshot() =
         GdouAccountSnapshot(
-            username = prefs[Keys.USERNAME].orEmpty(),
-            hasPassword = !prefs[Keys.ENCRYPTED_PASSWORD].isNullOrBlank(),
-            autoSyncEnabled = prefs[Keys.AUTO_SYNC] ?: false,
-            tableId = prefs[Keys.TABLE_ID].orEmpty(),
-            xnm = prefs[Keys.XNM].orEmpty(),
-            xqm = prefs[Keys.XQM].orEmpty(),
-            mfaChannel = prefs[Keys.MFA_CHANNEL] ?: GdouMfaChannel.WECOM.reAuthType,
-            lastSyncAtMillis = prefs[Keys.LAST_SYNC_AT] ?: 0L,
-            lastSyncMessage = prefs[Keys.LAST_SYNC_MSG].orEmpty(),
-            lastSyncSuccess = prefs[Keys.LAST_SYNC_OK] ?: false,
-            hasSession = !prefs[Keys.COOKIES].isNullOrBlank()
+            username = this[Keys.USERNAME].orEmpty(),
+            hasPassword = !this[Keys.ENCRYPTED_PASSWORD].isNullOrBlank(),
+            autoSyncEnabled = this[Keys.AUTO_SYNC] ?: false,
+            tableId = this[Keys.TABLE_ID].orEmpty(),
+            xnm = this[Keys.XNM].orEmpty(),
+            xqm = this[Keys.XQM].orEmpty(),
+            mfaChannel = this[Keys.MFA_CHANNEL] ?: GdouMfaChannel.WECOM.reAuthType,
+            lastSyncAtMillis = this[Keys.LAST_SYNC_AT] ?: 0L,
+            lastSyncMessage = this[Keys.LAST_SYNC_MSG].orEmpty(),
+            lastSyncSuccess = this[Keys.LAST_SYNC_OK] ?: false,
+            hasSession = !this[Keys.COOKIES].isNullOrBlank()
         )
+
+    internal val examCacheFlow: Flow<GdouExamCacheState> = dataStore.data.map { prefs ->
+        val key = prefs.toSnapshot().examKey()
+        val exams = key?.let { selected -> prefs.cachedExams().firstOrNull { it.term == selected.term }?.exams }
+        GdouExamCacheState(key, exams)
+    }
+
+    private fun Preferences.cachedExams(): List<GdouCachedExams> =
+        this[Keys.EXAM_CACHE]?.let { encoded ->
+            runCatching { CourseImportExport.json.decodeFromString<List<GdouCachedExams>>(encoded) }.getOrNull()
+        }.orEmpty()
+
+    internal suspend fun persistExams(key: GdouExamKey, exams: List<GdouExam>) {
+        dataStore.edit { prefs ->
+            if (prefs[Keys.USERNAME] != key.username) return@edit
+            val updated = (listOf(GdouCachedExams(key.term, exams)) + prefs.cachedExams().filter { it.term != key.term })
+                .take(MAX_CACHED_EXAM_TERMS)
+            prefs[Keys.EXAM_CACHE] = CourseImportExport.json.encodeToString(updated)
+        }
     }
 
     val syncLogFlow: Flow<List<GdouSyncLogEntry>> = dataStore.data.map { prefs ->
@@ -75,13 +103,20 @@ class GdouJwxtRepository(
 
     suspend fun snapshot(): GdouAccountSnapshot = snapshotFlow.first()
 
-    suspend fun saveCredentials(username: String, password: String) {
-        val crypto = secureCrypto.encrypt(password) ?: return
+    suspend fun saveCredentials(username: String, password: String): Boolean {
+        val crypto = secureCrypto.encrypt(password) ?: return false
+        val account = username.trim()
         dataStore.edit { prefs ->
-            prefs[Keys.USERNAME] = username.trim()
+            if (prefs[Keys.USERNAME] != account) {
+                http.cookieStore.clear()
+                prefs.remove(Keys.COOKIES)
+                prefs.remove(Keys.EXAM_CACHE)
+            }
+            prefs[Keys.USERNAME] = account
             prefs[Keys.ENCRYPTED_PASSWORD] = crypto.encryptedData
             prefs[Keys.CRYPTO_IV] = crypto.iv
         }
+        return true
     }
 
     suspend fun loadCredentials(): GdouCredentials? {
@@ -184,6 +219,7 @@ class GdouJwxtRepository(
         clearCookies()
         dataStore.edit { prefs ->
             prefs.remove(Keys.USERNAME)
+            prefs.remove(Keys.EXAM_CACHE)
             prefs.remove(Keys.ENCRYPTED_PASSWORD)
             prefs.remove(Keys.CRYPTO_IV)
             prefs[Keys.AUTO_SYNC] = false

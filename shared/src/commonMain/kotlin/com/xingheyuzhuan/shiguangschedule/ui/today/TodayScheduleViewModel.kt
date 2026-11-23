@@ -2,6 +2,11 @@ package com.xingheyuzhuan.shiguangschedule.ui.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExam
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouHttpClient
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExamKey
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouSyncUseCase
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.examKey
 import com.xingheyuzhuan.shiguangschedule.data.db.main.Course
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseTableConfig
 import com.xingheyuzhuan.shiguangschedule.data.db.main.CourseWithWeeks
@@ -9,9 +14,13 @@ import com.xingheyuzhuan.shiguangschedule.data.db.main.TimeSlot
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.data.repository.AppSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.CourseTableRepository
+import com.xingheyuzhuan.shiguangschedule.data.repository.GdouJwxtRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.StyleSettingsRepository
 import com.xingheyuzhuan.shiguangschedule.data.repository.TimeSlotRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -19,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -32,12 +42,44 @@ class TodayScheduleViewModel(
     private val appSettingsRepository: AppSettingsRepository,
     private val courseTableRepository: CourseTableRepository,
     private val styleSettingsRepository: StyleSettingsRepository,
-    private val timeSlotRepository: TimeSlotRepository
+    private val timeSlotRepository: TimeSlotRepository,
+    private val gdouRepository: GdouJwxtRepository,
+    private val gdouSyncUseCase: GdouSyncUseCase
 ) : ViewModel() {
 
     companion object {
         private const val DEFAULT_SEMESTER_TOTAL_WEEKS = 20
         private const val MAX_TIME_SORT_KEY = "99:99"
+    }
+
+    private data class ExamRefresh(val key: GdouExamKey, val error: ExamUiState.Error? = null)
+
+    private val examRefresh = MutableStateFlow<ExamRefresh?>(null)
+    val examUiState: StateFlow<ExamUiState> = combine(gdouRepository.examCacheFlow, examRefresh) { cached, refresh ->
+        val key = cached.key ?: return@combine ExamUiState.NotConfigured
+        val current = refresh?.takeIf { it.key == key }
+        ExamUiState.Content(cached.exams, refreshing = current != null && current.error == null, error = current?.error)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ExamUiState.NotConfigured)
+    private var examLoadJob: Job? = null
+
+    fun refreshExams() {
+        if (examLoadJob?.isActive == true) return
+        examLoadJob = viewModelScope.launch {
+            val key = gdouRepository.snapshot().examKey() ?: return@launch
+            examRefresh.value = ExamRefresh(key)
+            try {
+                gdouSyncUseCase.refreshExams(key)
+                examRefresh.value = null
+            } catch (e: CancellationException) {
+                examRefresh.value = null
+                throw e
+            } catch (e: Exception) {
+                val message = GdouHttpClient.connectivityText(e)?.let { "网络连接失败：$it" }
+                    ?: e.message.orEmpty().ifBlank { "考试信息加载失败" }
+                val needsLogin = message.contains("过期") || message.contains("登录") || message.contains("901")
+                examRefresh.value = ExamRefresh(key, ExamUiState.Error(message, needsLogin))
+            }
+        }
     }
 
     val gridStyle: StateFlow<ScheduleGridStyle> = styleSettingsRepository.styleFlow
@@ -150,6 +192,12 @@ data class CourseDisplayModel(
 )
 
 enum class TodayStatus { Normal, NoSemesterConfig, SemesterEnded, Vacation }
+
+sealed interface ExamUiState {
+    data object NotConfigured : ExamUiState
+    data class Content(val exams: List<GdouExam>?, val refreshing: Boolean, val error: Error?) : ExamUiState
+    data class Error(val message: String, val needsLogin: Boolean)
+}
 
 sealed class TodayUiState {
     data object Loading : TodayUiState()

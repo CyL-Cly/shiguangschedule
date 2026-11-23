@@ -1,6 +1,7 @@
 package com.xingheyuzhuan.shiguangschedule.data.api.gdou
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
@@ -19,6 +20,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.request
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Parameters
+import io.ktor.http.URLProtocol
+import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -29,19 +32,34 @@ data class GdouHttpExchange(
     val url: String,
     val location: String?,
     val body: String,
-    val bytes: ByteArray? = null
-)
+    val bytes: ByteArray? = null,
+    internal val setsCookie: Boolean = false
+) {
+    internal val isRedirect: Boolean
+        get() = status in REDIRECT_STATUSES && !location.isNullOrBlank()
+}
+
+private val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
+
+internal enum class GdouRoute(val host: String) {
+    Gateway(GDOU_WFW_HOST),
+    Auth(GDOU_AUTH_HOST),
+    DirectJw(GDOU_JW_HOST);
+
+    val origin: String get() = "https://$host"
+}
 
 @Single
-class GdouHttpClient {
+class GdouHttpClient internal constructor(engine: HttpClientEngine? = null) {
     val cookieStore = GdouCookieStore()
+    internal var jwRoute = GdouRoute.Gateway
     val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
     internal var hopSink: ((GdouHttpExchange, List<GdouCookie>) -> Unit)? = null
 
-    /** 请求连接类失败通知钩子：(requestUrl, error)，覆盖所有 host（jw/authserver/wfw），供同步日志记录明细。 */
+    /** 请求连接类失败通知钩子：(requestUrl, error)，覆盖网关请求，供同步日志记录明细。 */
     internal var requestFailureSink: ((String, Throwable) -> Unit)? = null
 
-    val client: HttpClient = HttpClient(gdouHttpEngine()) {
+    val client: HttpClient = HttpClient(engine ?: gdouHttpEngine()) {
         followRedirects = false
         expectSuccess = false
         install(HttpTimeout) {
@@ -59,13 +77,14 @@ class GdouHttpClient {
         }
     }
 
-    suspend fun get(
+    internal suspend fun get(
         url: String,
         referer: String? = null,
+        route: GdouRoute = jwRoute,
         extra: HttpRequestBuilder.() -> Unit = {}
     ): GdouHttpExchange {
-        val requestUrl = outboundUrl(url)
-        val refererUrl = referer?.let { outboundReferer(it) }
+        val requestUrl = outboundUrl(url, route)
+        val refererUrl = referer?.let { outboundUrl(it, route) }
         try {
             val response = client.get(requestUrl) {
                 if (refererUrl != null) header(HttpHeaders.Referrer, refererUrl)
@@ -80,13 +99,14 @@ class GdouHttpClient {
         }
     }
 
-    suspend fun getBytes(
+    internal suspend fun getBytes(
         url: String,
         referer: String? = null,
+        route: GdouRoute = jwRoute,
         extra: HttpRequestBuilder.() -> Unit = {}
     ): GdouHttpExchange {
-        val requestUrl = outboundUrl(url)
-        val refererUrl = referer?.let { outboundReferer(it) }
+        val requestUrl = outboundUrl(url, route)
+        val refererUrl = referer?.let { outboundUrl(it, route) }
         try {
             val response = client.get(requestUrl) {
                 if (refererUrl != null) header(HttpHeaders.Referrer, refererUrl)
@@ -101,15 +121,16 @@ class GdouHttpClient {
         }
     }
 
-    suspend fun postForm(
+    internal suspend fun postForm(
         url: String,
         fields: Map<String, String>,
         referer: String? = null,
         origin: String? = null,
-        ajax: Boolean = false
+        ajax: Boolean = false,
+        route: GdouRoute = jwRoute
     ): GdouHttpExchange {
-        val requestUrl = outboundUrl(url)
-        val refererUrl = referer?.let { outboundReferer(it) }
+        val requestUrl = outboundUrl(url, route)
+        val refererUrl = referer?.let { outboundUrl(it, route) }
         try {
             val response = client.submitForm(
                 url = requestUrl,
@@ -133,20 +154,23 @@ class GdouHttpClient {
         }
     }
 
-    suspend fun postRaw(
+    internal suspend fun postRaw(
         url: String,
         body: String,
         contentType: String,
         referer: String? = null,
-        ajax: Boolean = false
+        ajax: Boolean = false,
+        origin: String? = null,
+        route: GdouRoute = jwRoute
     ): GdouHttpExchange {
-        val requestUrl = outboundUrl(url)
-        val refererUrl = referer?.let { outboundReferer(it) }
+        val requestUrl = outboundUrl(url, route)
+        val refererUrl = referer?.let { outboundUrl(it, route) }
         try {
             val response = client.post(requestUrl) {
                 header(HttpHeaders.ContentType, contentType)
                 setBody(body)
                 if (refererUrl != null) header(HttpHeaders.Referrer, refererUrl)
+                if (origin != null) header(HttpHeaders.Origin, origin)
                 if (ajax) {
                     header("X-Requested-With", "XMLHttpRequest")
                     header(HttpHeaders.Accept, "application/json, text/javascript, */*; q=0.01")
@@ -161,59 +185,64 @@ class GdouHttpClient {
         }
     }
 
-    suspend fun followRedirects(startUrl: String, referer: String? = null, maxHops: Int = 16): GdouHttpExchange {
-        var current = outboundUrl(startUrl)
-        var currentReferer = referer?.let { outboundUrl(it) }
-        var last = get(current, currentReferer)
+    internal suspend fun followRedirects(
+        startUrl: String,
+        referer: String? = null,
+        maxHops: Int = 16,
+        route: GdouRoute = jwRoute
+    ): GdouHttpExchange = followRedirects(get(startUrl, referer, route), maxHops, route)
+
+    internal suspend fun followRedirects(
+        first: GdouHttpExchange,
+        maxHops: Int = 16,
+        route: GdouRoute = jwRoute
+    ): GdouHttpExchange {
+        var last = first
+        val visited = mutableSetOf(outboundUrl(first.url, route))
         var hops = 0
-        while (hops < maxHops) {
-            val headerLoc = last.location
-            val rawNext = when {
-                last.status in REDIRECTS && !headerLoc.isNullOrBlank() ->
-                    GdouHtml.resolveUrl(current, headerLoc)
-                GdouHtml.isSsoPath(current) ->
-                    GdouHtml.htmlRedirect(last.body)?.let { GdouHtml.resolveUrl(current, it) }
+        var followedWfwRootSelfRedirect = false
+        while (true) {
+            val location = when {
+                last.isRedirect -> last.location
+                GdouHtml.isSsoPath(last.url) -> GdouHtml.htmlRedirect(last.body)
                 else -> null
+            } ?: return last
+            val resolved = GdouHtml.resolveUrl(last.url, location)
+            val nextHost = Url(resolved).host
+            // 跨服务的跳转交给认证客户端选择传输路径。
+            if (route == GdouRoute.Auth && (nextHost == GDOU_JW_HOST || nextHost == GDOU_WFW_HOST)) return last
+            if (route != GdouRoute.Auth && nextHost == GDOU_AUTH_HOST) return last
+            val next = outboundUrl(resolved, route)
+            if (!visited.add(next)) {
+                // WFW 兑换后会在无票据的根 URL 设置 Cookie，再 302 到同一 URL；仅允许跟随一次。
+                val sameWfwRootAfterSetCookie = route == GdouRoute.Gateway && last.isRedirect && last.setsCookie &&
+                    !followedWfwRootSelfRedirect && Url(next) == Url(GDOU_WFW_HOME) && Url(last.url) == Url(next)
+                if (!sameWfwRootAfterSetCookie) return last
+                followedWfwRootSelfRedirect = true
             }
-            if (rawNext.isNullOrBlank()) {
-                return last.copy(url = current)
-            }
-            val next = outboundUrl(rawNext)
-            if (next == current) {
-                return last.copy(url = current)
-            }
-            currentReferer = current
-            current = next
-            last = get(current, currentReferer)
-            hops++
+            check(hops++ < maxHops) { "跳转次数过多" }
+            last = get(next, last.url, route)
         }
-        error("跳转次数过多")
     }
 
     fun parseJson(text: String): JsonElement = json.parseToJsonElement(text)
 
-    /**
-     * 出站 URL 改写（网关协议，唯一权威 E:/code/py/gdoulogin/wfw_login.py）：
-     * - 官方 jw → 嵌入 wfw 网关前缀（https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/...）；
-     * - authserver.gdou.edu.cn → wfw 网关根同路径（防绝对 Location 直连被拒）；
-     * - 其余（wfw 自身等）原样。全程禁止直接访问 jw/authserver 官方域。
-     */
-    private fun outboundUrl(url: String): String {
-        val https = GdouHtml.forceHttps(url)
-        return when (GdouHtml.hostOf(https)) {
-            GDOU_JW_HOST -> GdouHtml.rewriteOfficialJwToGateway(https)
-            GDOU_AUTH_HOST -> GDOU_WFW_ORIGIN + pathAndQueryOf(https)
-            else -> https
+    private fun outboundUrl(url: String, route: GdouRoute): String {
+        val parsed = Url(url)
+        require(parsed.protocol == URLProtocol.HTTPS && parsed.port == 443 && parsed.user == null) {
+            "教务请求必须使用 HTTPS"
         }
+        val target = when (route) {
+            GdouRoute.Gateway -> when (parsed.host) {
+                GDOU_WFW_HOST -> url
+                GDOU_JW_HOST -> GdouHtml.rewriteOfficialJwToGateway(url)
+                else -> null
+            }
+            GdouRoute.Auth -> url.takeIf { parsed.host == GDOU_AUTH_HOST && parsed.encodedPath.startsWith("/authserver/") }
+            GdouRoute.DirectJw -> url.takeIf { parsed.host == GDOU_JW_HOST }
+        }
+        return requireNotNull(target) { "教务请求目标与当前登录路径不匹配" }
     }
-
-    private fun pathAndQueryOf(url: String): String {
-        val afterScheme = url.substringAfter("://", missingDelimiterValue = "")
-        val pathAndQuery = afterScheme.substringAfter('/', missingDelimiterValue = "")
-        return if (pathAndQuery.isEmpty()) "/" else "/$pathAndQuery"
-    }
-
-    private fun outboundReferer(url: String): String = outboundUrl(url)
 
     private suspend fun toExchange(response: HttpResponse, asBytes: Boolean = false): GdouHttpExchange {
         val location = response.headers[HttpHeaders.Location]
@@ -222,7 +251,8 @@ class GdouHttpClient {
             url = response.request.url.toString(),
             location = location?.let { GdouHtml.resolveUrl(response.request.url.toString(), it) },
             body = if (asBytes) "" else response.bodyAsText(),
-            bytes = if (asBytes) response.bodyAsBytes() else null
+            bytes = if (asBytes) response.bodyAsBytes() else null,
+            setsCookie = !response.headers.getAll(HttpHeaders.SetCookie).isNullOrEmpty()
         ).also { notifyHop(it) }
     }
 
@@ -231,8 +261,6 @@ class GdouHttpClient {
     }
 
     companion object {
-        private val REDIRECTS = setOf(301, 302, 303, 307, 308)
-
         private val CONNECTIVITY_HINTS = listOf(
             "connection refused",
             "connect timed out",

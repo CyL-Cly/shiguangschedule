@@ -25,7 +25,5 @@ class StubUpdateController : AppUpdateController {
 
     override fun resetDownload() = Unit
 
-    override fun canRequestInstall(): Boolean = false
-
-    override fun launchInstall(filePath: String): Boolean = false
+    override fun requestInstall(): Boolean = true
 }

@@ -28,6 +28,7 @@ import kotlin.time.Clock
 
 data class GdouYangjiangUiState(
     val username: String = "",
+    val usernameEdited: Boolean = false,
     val password: String = "",
     val passwordSaved: Boolean = false,
     val autoSyncEnabled: Boolean = false,
@@ -52,6 +53,7 @@ data class GdouYangjiangUiState(
         if (this === other) return true
         if (other !is GdouYangjiangUiState) return false
         return username == other.username &&
+            usernameEdited == other.usernameEdited &&
             password == other.password &&
             passwordSaved == other.passwordSaved &&
             autoSyncEnabled == other.autoSyncEnabled &&
@@ -104,9 +106,10 @@ class GdouYangjiangViewModel(
         )
         val tableId = form.tableId.ifBlank { snapshot.tableId.ifBlank { settings.currentCourseTableId } }
         val tableName = tables.find { it.id == tableId }?.name.orEmpty()
+        val username = if (form.usernameEdited) form.username else snapshot.username
         form.copy(
-            username = form.username.ifBlank { snapshot.username },
-            passwordSaved = snapshot.hasPassword,
+            username = username,
+            passwordSaved = snapshot.hasPassword && username.trim() == snapshot.username,
             autoSyncEnabled = snapshot.autoSyncEnabled,
             tableId = tableId,
             tableName = tableName,
@@ -121,7 +124,7 @@ class GdouYangjiangViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GdouYangjiangUiState())
 
-    fun onUsernameChange(value: String) = _form.update { it.copy(username = value) }
+    fun onUsernameChange(value: String) = _form.update { it.copy(username = value, usernameEdited = true) }
     fun onPasswordChange(value: String) = _form.update { it.copy(password = value) }
     fun onCaptchaChange(value: String) = _form.update { it.copy(captchaInput = value) }
     fun onMfaCodeChange(value: String) = _form.update { it.copy(mfaCode = value) }
@@ -147,6 +150,7 @@ class GdouYangjiangViewModel(
 
     fun loginAndSync() {
         viewModelScope.launch {
+            if (_form.value.needsMfa || _form.value.isBusy) return@launch
             val state = uiState.value
             val username = state.username.trim()
             if (username.isBlank()) {
@@ -154,7 +158,10 @@ class GdouYangjiangViewModel(
                 return@launch
             }
             if (state.password.isNotBlank()) {
-                repo.saveCredentials(username, state.password)
+                if (!useCase.saveCredentials(username, state.password)) {
+                    ToastManager.show("无法保存教务账号密码")
+                    return@launch
+                }
             } else if (!state.passwordSaved) {
                 ToastManager.show("请输入密码")
                 return@launch
@@ -198,7 +205,7 @@ class GdouYangjiangViewModel(
                         runSync()
                     }
                     is GdouAuthResult.NeedMfa -> {
-                        _form.update { it.copy(needsMfa = true, mfaHint = result.hint) }
+                        _form.update { it.copy(needsMfa = true, mfaHint = result.hint, mfaChannel = result.channel, mfaCode = "") }
                         ToastManager.show("仍需二次认证")
                     }
                     is GdouAuthResult.Failed -> ToastManager.show(result.message)
@@ -212,7 +219,7 @@ class GdouYangjiangViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            repo.logout()
+            useCase.logout()
             GdouSyncScheduler.setEnabled(false)
             _form.update {
                 it.copy(
@@ -240,7 +247,8 @@ class GdouYangjiangViewModel(
                         )
                     }
                     if (uiState.value.autoSyncEnabled) GdouSyncScheduler.setEnabled(true)
-                    ToastManager.show("导入成功，共 ${result.courseCount} 门课")
+                    val exams = result.examCount?.let { "，已同步 $it 场考试" } ?: "，考试同步失败"
+                    ToastManager.show("导入成功，共 ${result.courseCount} 门课$exams")
                 }
                 is GdouSyncResult.NeedCaptcha -> {
                     _form.update { it.copy(captchaImage = result.imagePng, captchaInput = "") }

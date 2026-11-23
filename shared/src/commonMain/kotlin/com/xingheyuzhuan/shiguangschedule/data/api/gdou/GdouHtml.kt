@@ -71,9 +71,13 @@ internal object GdouHtml {
     fun isOfficialJwUrl(url: String): Boolean = hostOf(url) == GDOU_JW_HOST
 
     fun isGatewayJwUrl(url: String): Boolean =
-        hostOf(url) == GDOU_WFW_HOST && url.removePrefix(GDOU_WFW_ORIGIN).startsWith("/https://$GDOU_JW_HOST")
+        hostOf(url) == GDOU_WFW_HOST && pathOf(url).let { path ->
+            val prefix = "/https://$GDOU_JW_HOST"
+            path == prefix || path.startsWith("$prefix/")
+        }
 
-    fun isJwUrl(url: String): Boolean = isJwHost(hostOf(url)) || isGatewayJwUrl(url)
+    fun isJwUrl(url: String): Boolean = isJwHost(hostOf(url)) || isGatewayJwUrl(url) ||
+        (hostOf(url) == GDOU_WFW_HOST && pathOf(url) == pathOf(GDOU_KB_INDEX))
 
     fun rewriteOfficialJwToGateway(url: String): String {
         if (!isOfficialJwUrl(url)) return url
@@ -150,12 +154,13 @@ internal object GdouHtml {
 
     fun resolveUrl(base: String, location: String): String {
         if (location.startsWith("http://") || location.startsWith("https://")) return forceHttps(location)
+        if (location.startsWith("//")) return forceHttps("https:$location")
         val originEnd = base.indexOf('/', base.indexOf("://") + 3)
         val origin = if (originEnd == -1) base else base.substring(0, originEnd)
-        return if (location.startsWith("/") && !location.startsWith("//")) {
-            (gatewayEmbedPrefix(base) ?: origin) + location
-        } else if (location.startsWith("/")) {
+        return if (location.startsWith("/authserver/") || location.startsWith("/https://")) {
             origin + location
+        } else if (location.startsWith("/")) {
+            (gatewayEmbedPrefix(base) ?: origin) + location
         } else {
             val slash = base.lastIndexOf('/')
             forceHttps(base.substring(0, slash + 1) + location)

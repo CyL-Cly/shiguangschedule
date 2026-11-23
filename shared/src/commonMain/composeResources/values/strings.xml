@@ -36,6 +36,15 @@
     <string name="title_vacation_until_start">假期中（距离开学还有%1$s天）</string>
     <string name="title_semester_not_set">请设置开学日期</string>
     <string name="date_format_year_month_day">%1$s年%2$s月%3$s日</string>
+    <string name="title_exam_schedule">考试日程</string>
+    <string name="text_exam_loading">正在加载考试日程...</string>
+    <string name="text_exam_not_synced">尚未同步本学期考试。可同步课表或点击刷新。</string>
+    <string name="text_no_exams">本学期暂未查询到考试安排</string>
+    <string name="text_exam_load_failed">考试日程加载失败</string>
+    <string name="text_exam_login_required">教务会话已失效，请重新登录</string>
+    <string name="action_exam_login">教务登录</string>
+    <string name="exam_name_prefix">考试：%1$s</string>
+    <string name="exam_seat_prefix">座位号：%1$s</string>
 
     <!-- 添加课程 -->
     <string name="toast_save_success">保存成功</string>
@@ -353,11 +362,12 @@
     <string name="dialog_downloading_update">正在下载更新</string>
     <string name="dialog_download_failed">更新下载失败</string>
     <string name="dialog_download_failed_msg">多次尝试均失败，请检查网络后重试</string>
-    <string name="dialog_apk_ready">新版本已下载</string>
-    <string name="dialog_apk_ready_msg">更新包已下载完成，是否立即安装？</string>
+    <string name="update_auto_install_notice">下载并校验通过后将自动尝试安装。</string>
     <string name="dialog_need_unknown_sources">需要安装未知应用权限</string>
     <string name="dialog_need_unknown_sources_msg">请在系统设置中允许本应用安装未知应用，返回后将自动继续安装</string>
-    <string name="toast_install_failed">无法打开安装界面，请手动安装</string>
+    <string name="toast_install_failed">更新安装失败，请重试或手动安装。</string>
+    <string name="toast_install_confirmation_required">系统要求确认，已停止应用内更新。你可以手动安装新版。</string>
+    <string name="toast_install_unsupported">当前 Android 版本不支持免确认更新，请手动安装新版。</string>
     <string name="update_downloaded_bytes">已下载 %1$s</string>
     <string name="update_downloaded_bytes_of">已下载 %1$s / %2$s</string>
     <string name="update_fallback_notes">检测到新版本，请更新后继续使用</string>

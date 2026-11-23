@@ -2,7 +2,6 @@ package com.xingheyuzhuan.shiguangschedule.tool.update
 
 import android.content.Context
 import org.koin.core.annotation.Single
-import java.io.File
 
 /** [AppUpdateController] 的 Android 实现：内部持有唯一 UpdateKit 实例并转发。 */
 @Single
@@ -29,8 +28,5 @@ class AndroidUpdateController(private val context: Context) : AppUpdateControlle
 
     override fun resetDownload() = kit.resetDownload()
 
-    override fun canRequestInstall(): Boolean = ApkInstaller.canRequestInstall(context)
-
-    override fun launchInstall(filePath: String): Boolean =
-        ApkInstaller.launchInstall(context, File(filePath), config.fileProviderAuthority)
+    override fun requestInstall(): Boolean = kit.requestInstall()
 }

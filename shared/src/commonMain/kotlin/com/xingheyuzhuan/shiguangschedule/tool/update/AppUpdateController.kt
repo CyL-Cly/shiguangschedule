@@ -15,9 +15,6 @@ interface AppUpdateController {
     fun dismiss()
     fun resetDownload()
 
-    /** 是否已授权安装未知应用（仅 Android 有效，Stub 恒 false）。 */
-    fun canRequestInstall(): Boolean
-
-    /** 用 FileProvider 拉起系统安装界面；返回是否成功启动（仅 Android 有效）。 */
-    fun launchInstall(filePath: String): Boolean
+    /** 请求免确认自更新。返回 false 时需引导用户授予安装未知应用权限。 */
+    fun requestInstall(): Boolean
 }

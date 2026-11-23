@@ -214,14 +214,14 @@ fun GdouYangjiangScreen(
                         Text(stringResource(Res.string.gdou_action_submit_mfa))
                     }
                 }
-            }
-
-            Button(
-                onClick = viewModel::loginAndSync,
-                enabled = !state.isBusy,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(Res.string.gdou_action_login_import))
+            } else {
+                Button(
+                    onClick = viewModel::loginAndSync,
+                    enabled = !state.isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(Res.string.gdou_action_login_import))
+                }
             }
 
             Card(

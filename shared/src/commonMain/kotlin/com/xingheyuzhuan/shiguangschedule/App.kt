@@ -86,8 +86,7 @@ fun App() {
                 onRetryDownload = { updateController.downloadLatest() },
                 onDismiss = updateController::dismiss,
                 onReset = updateController::resetDownload,
-                canRequestInstall = updateController::canRequestInstall,
-                onInstallRequest = updateController::launchInstall,
+                onInstallRequest = updateController::requestInstall,
             )
         }
     } else {

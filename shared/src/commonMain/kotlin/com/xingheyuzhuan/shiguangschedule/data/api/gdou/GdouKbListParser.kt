@@ -285,7 +285,7 @@ object GdouKbListParser {
                 cur.startSection == nxt.startSection &&
                 cur.endSection == nxt.endSection
             if (sameSection) {
-                cur = cur.copy(weeks = (cur.weeks + nxt.weeks).toSortedSet().toList())
+                cur = cur.copy(weeks = (cur.weeks + nxt.weeks).distinct().sorted())
             } else {
                 step2.add(cur)
                 cur = nxt

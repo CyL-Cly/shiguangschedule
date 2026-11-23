@@ -1,10 +1,13 @@
 package com.xingheyuzhuan.shiguangschedule.data.api.gdou
 
-import kotlinx.serialization.Serializable
+import kotlin.time.Clock
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Clock
+import kotlinx.serialization.Serializable
 
 const val GDOU_AUTH_HOST = "authserver.gdou.edu.cn"
 const val GDOU_JW_HOST = "jw.gdou.edu.cn"
@@ -13,13 +16,11 @@ const val GDOU_WFW_ORIGIN = "https://$GDOU_WFW_HOST"
 const val GDOU_WFW_HOME = "$GDOU_WFW_ORIGIN/"
 const val GDOU_WFW_GATEWAY_PREFIX = "$GDOU_WFW_ORIGIN/https://$GDOU_JW_HOST"
 
-/** wfw 代理的 CAS 登录入口（网关下内嵌登录页的 form action 前缀，实证于 2026-09-21）。 */
-const val GDOU_WFW_PROXY_AUTH_LOGIN = "$GDOU_WFW_ORIGIN/authserver/login?"
 const val GDOU_AUTH_BASE = "https://$GDOU_AUTH_HOST/authserver"
 const val GDOU_JW_BASE = "https://$GDOU_JW_HOST"
 const val GDOU_SERVICE_URL = "$GDOU_JW_BASE/sso/jziotlogin"
 const val GDOU_JW_MENU = "$GDOU_JW_BASE/xtgl/index_initMenu.html?jsdm=xs"
-const val GDOU_KB_INDEX = "$GDOU_JW_BASE/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
+const val GDOU_KB_INDEX = "$GDOU_WFW_ORIGIN/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
 const val GDOU_KB_JSON = "$GDOU_JW_BASE/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
 const val GDOU_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0"
@@ -60,6 +61,7 @@ data class GdouCredentials(
     val password: String
 )
 
+@Serializable
 data class GdouTerm(
     val xnm: String,
     val xqm: String
@@ -79,6 +81,22 @@ data class GdouAccountSnapshot(
     val lastSyncSuccess: Boolean = false,
     val hasSession: Boolean = false
 )
+
+internal fun GdouAccountSnapshot.resolvedTerm(): GdouTerm {
+    if (xnm.isNotBlank() && xqm.isNotBlank()) return GdouTerm(xnm, xqm)
+    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    return GdouKbListParser.inferTerm(now.year, now.month.number)
+}
+
+internal data class GdouExamKey(val username: String, val term: GdouTerm)
+
+internal fun GdouAccountSnapshot.examKey(): GdouExamKey? =
+    username.takeIf { it.isNotBlank() }?.let { GdouExamKey(it, resolvedTerm()) }
+
+@Serializable
+internal data class GdouCachedExams(val term: GdouTerm, val exams: List<GdouExam>)
+
+internal data class GdouExamCacheState(val key: GdouExamKey?, val exams: List<GdouExam>?)
 
 @Serializable
 data class GdouSyncLogEntry(
@@ -104,18 +122,20 @@ class GdouSyncLogCollector(
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
     private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) {
-    private val lines = mutableListOf<String>()
+    private val lines = MutableStateFlow<List<String>>(emptyList())
 
     fun info(text: String) = append(GdouSyncLogLevel.INFO, text)
 
     fun error(text: String) = append(GdouSyncLogLevel.ERROR, text)
 
     fun append(level: GdouSyncLogLevel, text: String) {
-        if (text.isNotBlank()) lines.add(formatLine(nowMillis(), level, text, timeZone))
+        if (text.isBlank()) return
+        val line = formatLine(nowMillis(), level, text, timeZone)
+        lines.update { it + line }
     }
 
     /** 无任何行时返回 null，避免落库空串。 */
-    fun detailOrNull(): String? = if (lines.isEmpty()) null else lines.joinToString("\n")
+    fun detailOrNull(): String? = lines.value.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
     companion object {
         fun formatLine(
@@ -156,7 +176,12 @@ sealed interface GdouAuthResult {
 }
 
 sealed interface GdouSyncResult {
-    data class Success(val courseCount: Int, val startDate: String?, val totalWeeks: Int) : GdouSyncResult
+    data class Success(
+        val courseCount: Int,
+        val startDate: String?,
+        val totalWeeks: Int,
+        val examCount: Int? = null
+    ) : GdouSyncResult
     data class NeedCaptcha(val imagePng: ByteArray) : GdouSyncResult {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true

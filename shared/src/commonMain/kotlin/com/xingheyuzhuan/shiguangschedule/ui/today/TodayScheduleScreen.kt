@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xingheyuzhuan.shiguangschedule.Destination
+import com.xingheyuzhuan.shiguangschedule.data.api.gdou.GdouExam
 import com.xingheyuzhuan.shiguangschedule.data.model.ScheduleGridStyle
 import com.xingheyuzhuan.shiguangschedule.ui.components.AdaptiveNavigationScaffold
 import com.xingheyuzhuan.shiguangschedule.ui.theme.LocalIsDarkTheme
@@ -50,13 +52,23 @@ import org.jetbrains.compose.resources.stringArrayResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import shiguangschedule.shared.generated.resources.Res
+import shiguangschedule.shared.generated.resources.action_exam_login
+import shiguangschedule.shared.generated.resources.action_refresh
 import shiguangschedule.shared.generated.resources.course_position_prefix
 import shiguangschedule.shared.generated.resources.course_teacher_prefix
 import shiguangschedule.shared.generated.resources.date_format_year_month_day
+import shiguangschedule.shared.generated.resources.exam_name_prefix
+import shiguangschedule.shared.generated.resources.exam_seat_prefix
 import shiguangschedule.shared.generated.resources.label_remark
 import shiguangschedule.shared.generated.resources.status_semester_ended
+import shiguangschedule.shared.generated.resources.text_exam_load_failed
+import shiguangschedule.shared.generated.resources.text_exam_loading
+import shiguangschedule.shared.generated.resources.text_exam_login_required
+import shiguangschedule.shared.generated.resources.text_exam_not_synced
 import shiguangschedule.shared.generated.resources.text_no_courses_today
+import shiguangschedule.shared.generated.resources.text_no_exams
 import shiguangschedule.shared.generated.resources.title_current_week
+import shiguangschedule.shared.generated.resources.title_exam_schedule
 import shiguangschedule.shared.generated.resources.title_semester_not_set
 import shiguangschedule.shared.generated.resources.title_today_schedule
 import shiguangschedule.shared.generated.resources.title_vacation_until_start
@@ -77,7 +89,9 @@ fun TodayScheduleScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val gridStyle by viewModel.gridStyle.collectAsState()
+    val examUiState by viewModel.examUiState.collectAsState()
     val isDark = LocalIsDarkTheme.current
+
 
     AdaptiveNavigationScaffold(
         currentDestination = Destination.TodaySchedule,
@@ -101,7 +115,15 @@ fun TodayScheduleScreen(
                 when (val state = uiState) {
                     is TodayUiState.Loading -> { /* 可放置圆圈加载 */ }
                     is TodayUiState.Success -> {
-                        TodayContent(state, gridStyle, isDark, navPadding)
+                        TodayContent(
+                            state = state,
+                            gridStyle = gridStyle,
+                            isDark = isDark,
+                            navPadding = navPadding,
+                            examUiState = examUiState,
+                            onRefreshExams = viewModel::refreshExams,
+                            onOpenGdou = { onNavigate(Destination.GdouYangjiangSync) }
+                        )
                     }
                 }
             }
@@ -114,7 +136,10 @@ fun TodayContent(
     state: TodayUiState.Success,
     gridStyle: ScheduleGridStyle,
     isDark: Boolean,
-    navPadding: PaddingValues = PaddingValues(0.dp)
+    navPadding: PaddingValues = PaddingValues(0.dp),
+    examUiState: ExamUiState = ExamUiState.NotConfigured,
+    onRefreshExams: () -> Unit = {},
+    onOpenGdou: () -> Unit = {}
 ) {
     val currentTime = remember { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).time }
 
@@ -192,23 +217,33 @@ fun TodayContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (state.courses.isEmpty()) {
-            EmptyStateView()
-        } else {
-            LazyColumn(
-                state = scrollState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(
-                    bottom = navPadding.calculateBottomPadding() + 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
+        LazyColumn(
+            state = scrollState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(
+                bottom = navPadding.calculateBottomPadding() + 16.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            if (state.courses.isEmpty()) {
+                item { EmptyStateView() }
+            } else {
                 itemsIndexed(state.courses) { _, model ->
                     CourseTimelineItem(model, gridStyle, isDark)
                 }
+            }
+            if (examUiState is ExamUiState.Content) {
                 item {
-                    Spacer(modifier = Modifier.height(32.dp))
+                    ExamScheduleSection(
+                        state = examUiState,
+                        today = state.today,
+                        onRefresh = onRefreshExams,
+                        onOpenGdou = onOpenGdou
+                    )
                 }
+            }
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
@@ -331,8 +366,130 @@ fun CourseTimelineItem(
 }
 
 @Composable
+private fun ExamScheduleSection(
+    state: ExamUiState.Content,
+    today: LocalDate,
+    onRefresh: () -> Unit,
+    onOpenGdou: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(Res.string.title_exam_schedule),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            TextButton(onClick = onRefresh, enabled = !state.refreshing) {
+                Text(text = stringResource(Res.string.action_refresh))
+            }
+        }
+
+        if (state.refreshing) ExamMessage(stringResource(Res.string.text_exam_loading))
+        state.error?.let { error ->
+            val fallback = stringResource(
+                if (error.needsLogin) Res.string.text_exam_login_required else Res.string.text_exam_load_failed
+            )
+            ExamMessage(if (error.needsLogin) fallback else error.message.ifBlank { fallback })
+            if (error.needsLogin) {
+                TextButton(onClick = onOpenGdou) {
+                    Text(text = stringResource(Res.string.action_exam_login))
+                }
+            }
+        }
+        val exams = state.exams
+        when {
+            exams == null -> if (!state.refreshing && state.error == null) {
+                ExamMessage(stringResource(Res.string.text_exam_not_synced))
+            }
+            exams.isEmpty() -> ExamMessage(stringResource(Res.string.text_no_exams))
+            else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                exams.forEach { exam -> ExamCard(exam = exam, isToday = exam.date == today.toString()) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExamMessage(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun ExamCard(exam: GdouExam, isToday: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = exam.courseName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = listOf(exam.date, exam.time).filter { it.isNotBlank() }.joinToString("  "),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            val location = listOf(exam.campus, exam.location)
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString(" · ")
+            if (location.isNotBlank()) {
+                Text(
+                    text = stringResource(Res.string.course_position_prefix, location),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (exam.seat.isNotBlank()) {
+                Text(
+                    text = stringResource(Res.string.exam_seat_prefix, exam.seat),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (exam.examName.isNotBlank()) {
+                Text(
+                    text = stringResource(Res.string.exam_name_prefix, exam.examName),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+            if (exam.note.isNotBlank()) {
+                Text(
+                    text = "${stringResource(Res.string.label_remark)}: ${exam.note}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyStateView() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxWidth().height(160.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Text(
             text = stringResource(Res.string.text_no_courses_today),
             style = MaterialTheme.typography.bodyLarge,
