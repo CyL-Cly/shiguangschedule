@@ -1,0 +1,47 @@
+name: iOS Release Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-device:
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build unsigned iOS device app
+        run: |
+          chmod +x gradlew
+          xcodebuild -version
+          xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp \
+            -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/ios-build" build
+      - name: Verify and package IPA
+        run: |
+          app="$RUNNER_TEMP/ios-build/shiguangschedule.app"
+          read_plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$app/Info.plist"; }
+          version="$(read_plist CFBundleShortVersionString)"
+          build="$(read_plist CFBundleVersion)"
+          binary="$app/$(read_plist CFBundleExecutable)"
+          test "$(xcrun lipo -archs "$binary")" = arm64
+          xcrun vtool -show-build "$binary" | grep -E 'platform[[:space:]]+IOS$'
+          echo "iOS version $version, build $build, minimum iOS $(read_plist MinimumOSVersion)"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" dist
+          ditto "$app" "$RUNNER_TEMP/ipa/Payload/shiguangschedule.app"
+          (cd "$RUNNER_TEMP/ipa" && zip -q -r -y "$GITHUB_WORKSPACE/dist/shiguangschedule-v${version}-ios-arm64-unsigned.ipa" Payload)
+          unzip -tq dist/*.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-arm64-unsigned-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
