@@ -1,8 +1,10 @@
 pluginManagement {
     repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
-        maven("https://maven.aliyun.com/repository/gradle-plugin")
+        if (providers.environmentVariable("GRADLE_USE_ALIYUN_MIRRORS").orNull != "false") {
+            maven("https://maven.aliyun.com/repository/google")
+            maven("https://maven.aliyun.com/repository/public")
+            maven("https://maven.aliyun.com/repository/gradle-plugin")
+        }
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -18,8 +20,10 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
+        if (providers.environmentVariable("GRADLE_USE_ALIYUN_MIRRORS").orNull != "false") {
+            maven("https://maven.aliyun.com/repository/google")
+            maven("https://maven.aliyun.com/repository/public")
+        }
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
