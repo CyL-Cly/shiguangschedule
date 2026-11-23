@@ -2,17 +2,23 @@ name: iOS Release Build
 
 on:
   workflow_dispatch:
+    inputs:
+      optimize_native:
+        description: Enable Kotlin/Native release optimizations
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 jobs:
   ios-device:
-    # The Intel image has more memory; Xcode still targets iOS arm64.
-    runs-on: macos-26-intel
+    # Use the higher-memory Intel image for Kotlin/Native release optimization.
+    runs-on: ${{ inputs.optimize_native && 'macos-26-intel' || 'macos-26' }}
     timeout-minutes: 45
     env:
       GRADLE_USE_ALIYUN_MIRRORS: 'false'
+      IOS_NATIVE_OPTIMIZATION: ${{ inputs.optimize_native }}
       DEVELOPER_DIR: /Applications/Xcode_26.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v5
@@ -27,7 +33,6 @@ jobs:
           gradle_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
           mkdir -p "$gradle_home"
           printf '\n%s\n' \
-            'kotlin.native.binary.enableReleaseBinaryCache=true' \
             'kotlin.internal.native.enableReleaseBinaryCache=true' \
             'org.gradle.workers.max=2' >> "$gradle_home/gradle.properties"
           ./gradlew :shared:linkReleaseFrameworkIosArm64 --console=plain --stacktrace
