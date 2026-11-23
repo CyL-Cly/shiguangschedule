@@ -5,3 +5,6 @@ PRODUCT_BUNDLE_IDENTIFIER=com.xingheyuzhuan.shiguangschedule.shiguangschedule$(T
 
 CURRENT_PROJECT_VERSION=59
 MARKETING_VERSION=2.2.1
+
+// The static Kotlin framework uses the system SQLite library.
+OTHER_LDFLAGS = $(inherited) -lsqlite3

@@ -27,7 +27,6 @@ jobs:
           gradle_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
           mkdir -p "$gradle_home"
           printf '\n%s\n' \
-            'kotlin.native.binary.enableReleaseBinaryCache=true' \
             'kotlin.internal.native.enableReleaseBinaryCache=true' \
             'org.gradle.workers.max=2' >> "$gradle_home/gradle.properties"
           ./gradlew :shared:linkReleaseFrameworkIosArm64 --console=plain --stacktrace
