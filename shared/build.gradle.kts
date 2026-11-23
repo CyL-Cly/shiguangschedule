@@ -20,7 +20,6 @@ val androidOnly = providers.gradleProperty("androidOnly").isPresent
 
 kotlin {
     if (!androidOnly) {
-        val optimizeIosNative = providers.environmentVariable("IOS_NATIVE_OPTIMIZATION").orNull != "false"
         listOf(
             iosArm64(),
             iosSimulatorArm64()
@@ -28,7 +27,6 @@ kotlin {
             iosTarget.binaries.framework {
                 baseName = "Shared"
                 isStatic = true
-                if (!optimizeIosNative) optimized = false
             }
         }
 
@@ -126,7 +124,6 @@ kotlin {
         }
 
         if (!androidOnly) {
-        val optimizeIosNative = providers.environmentVariable("IOS_NATIVE_OPTIMIZATION").orNull != "false"
             jvmMain.dependencies {
                 implementation(libs.androidx.sqlite.bundled)
                 implementation(libs.ktor.client.cio)
@@ -150,7 +147,6 @@ dependencies {
     androidRuntimeClasspath(libs.compose.ui.tooling)
     add("kspAndroid", libs.androidx.room3.compiler)
     if (!androidOnly) {
-        val optimizeIosNative = providers.environmentVariable("IOS_NATIVE_OPTIMIZATION").orNull != "false"
         add("kspJvm", libs.androidx.room3.compiler)
         add("kspIosArm64", libs.androidx.room3.compiler)
         add("kspIosSimulatorArm64", libs.androidx.room3.compiler)
