@@ -61,6 +61,7 @@ import shiguangschedule.shared.generated.resources.item_github_repo
 import shiguangschedule.shared.generated.resources.item_language_settings
 import shiguangschedule.shared.generated.resources.item_open_source_licenses
 import shiguangschedule.shared.generated.resources.item_start_screen_settings
+import shiguangschedule.shared.generated.resources.item_upstream_github_repo
 import shiguangschedule.shared.generated.resources.item_update_repo
 import shiguangschedule.shared.generated.resources.label_version_prefix
 import shiguangschedule.shared.generated.resources.language_24px
@@ -72,7 +73,8 @@ import shiguangschedule.shared.generated.resources.theme_settings_title
 import shiguangschedule.shared.generated.resources.title_more_options
 import shiguangschedule.shared.generated.resources.update_24px
 
-private const val GITHUB_REPO_URL = "https://github.com/XingHeYuZhuan/shiguangschedule"
+private const val UPSTREAM_GITHUB_REPO_URL = "https://github.com/XingHeYuZhuan/shiguangschedule"
+private const val PROJECT_GITHUB_REPO_URL = "https://github.com/CyL-Cly/shiguangschedule"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -237,8 +239,14 @@ fun MoreOptionsScreen(
                     // GitHub 仓库
                     SettingListItem(
                         icon = vectorResource(Res.drawable.code_24px),
+                        title = stringResource(Res.string.item_upstream_github_repo),
+                        onClick = { uriHandler.openUri(UPSTREAM_GITHUB_REPO_URL) }
+                    )
+
+                    SettingListItem(
+                        icon = vectorResource(Res.drawable.code_24px),
                         title = stringResource(Res.string.item_github_repo),
-                        onClick = { uriHandler.openUri(GITHUB_REPO_URL) }
+                        onClick = { uriHandler.openUri(PROJECT_GITHUB_REPO_URL) }
                     )
 
                     // 开源许可证
