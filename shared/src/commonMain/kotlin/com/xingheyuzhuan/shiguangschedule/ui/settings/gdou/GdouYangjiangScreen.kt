@@ -55,10 +55,10 @@ import shiguangschedule.shared.generated.resources.gdou_action_send_mfa
 import shiguangschedule.shared.generated.resources.gdou_action_submit_mfa
 import shiguangschedule.shared.generated.resources.gdou_auto_sync
 import shiguangschedule.shared.generated.resources.gdou_auto_sync_desc
-import shiguangschedule.shared.generated.resources.gdou_hint_password_saved
 import shiguangschedule.shared.generated.resources.gdou_label_captcha
 import shiguangschedule.shared.generated.resources.gdou_label_mfa
 import shiguangschedule.shared.generated.resources.gdou_label_password
+import shiguangschedule.shared.generated.resources.gdou_label_password_saved
 import shiguangschedule.shared.generated.resources.gdou_label_table
 import shiguangschedule.shared.generated.resources.gdou_label_term
 import shiguangschedule.shared.generated.resources.gdou_label_username
@@ -121,9 +121,10 @@ fun GdouYangjiangScreen(
             OutlinedTextField(
                 value = state.password,
                 onValueChange = viewModel::onPasswordChange,
-                label = { Text(stringResource(Res.string.gdou_label_password)) },
-                placeholder = {
-                    if (state.passwordSaved) Text(stringResource(Res.string.gdou_hint_password_saved))
+                label = {
+                    val label = if (state.passwordSaved) Res.string.gdou_label_password_saved
+                    else Res.string.gdou_label_password
+                    Text(stringResource(label))
                 },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),

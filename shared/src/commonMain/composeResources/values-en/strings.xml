@@ -601,7 +601,7 @@
     <string name="gdou_title">GDOU Yangjiang sync</string>
     <string name="gdou_label_username">Student ID</string>
     <string name="gdou_label_password">Password</string>
-    <string name="gdou_hint_password_saved">Saved. Leave blank to keep it</string>
+    <string name="gdou_label_password_saved">Leave blank to reuse password</string>
     <string name="gdou_label_xnm">Academic year start (e.g. 2026)</string>
     <string name="gdou_label_term">Term</string>
     <string name="gdou_term_first">Fall term</string>
